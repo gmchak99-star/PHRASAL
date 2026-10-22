@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>구동사 1000회 집중 섀도잉 마스터 플레이어</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* OLED 암전 커튼 */
+    #dark-curtain {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #000000;
+      z-index: 99999;
+      color: #334155;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .pulse-dot {
+      animation: pulseAnimation 2s infinite ease-in-out;
+    }
+    @keyframes pulseAnimation {
+      0%, 100% { opacity: 0.2; transform: scale(0.95); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col pb-28">
+
+  <!-- 상단 네비게이션 & 긴급 제어 바 -->
+  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 shadow-lg">
+    <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-xl font-black bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent tracking-tight">
+          PHRASAL VERBS
+        </span>
+        <span class="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">1000회 반복</span>
+      </div>
+      
+      <!-- 상단 컨트롤 버튼 그룹 -->
+      <div class="flex items-center gap-2">
+        <!-- 긴급 정지 버튼 -->
+        <button onclick="emergencyStopAll()" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-md transition-all">
+          <span>⏹️ 즉시 정지</span>
+        </button>
+        <!-- OLED 절전 모드 -->
+        <button onclick="activateSleepCurtain()" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-xs font-bold transition-all">
+          <span>🌙 절전 화면</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 글로벌 재생 상태 표시기 (진행 시 표시) -->
+  <section id="global-player-banner" class="hidden bg-indigo-950/80 border-b border-indigo-500/30 px-4 py-2 text-xs">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2 overflow-hidden pr-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+        <span id="global-current-title" class="font-bold text-indigo-300 truncate">재생 준비 완료</span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <span id="global-counter-badge" class="font-mono font-black text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded">0 / 1000</span>
+        <button onclick="emergencyStopAll()" class="text-rose-400 hover:text-rose-300 font-bold px-1.5">✕</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 메인 카테고리 탭 (Day 1 ~ Day 4 & 복습함) -->
+  <div class="max-w-4xl mx-auto w-full px-4 pt-4">
+    <div class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-2">
+      <button onclick="switchCategory('day1')" id="tab-day1" class="category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white shadow-md transition-all">
+        🏃 Day 1 일상 &amp; 루틴
+      </button>
+      <button onclick="switchCategory('day2')" id="tab-day2" class="category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all">
+        🏡 Day 2 펜션 &amp; 운영
+      </button>
+      <button onclick="switchCategory('day3')" id="tab-day3" class="category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all">
+        🤿 Day 3 헬스 &amp; 다이빙
+      </button>
+      <button onclick="switchCategory('day4')" id="tab-day4" class="category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all">
+        💬 Day 4 소통 &amp; 일상대화
+      </button>
+      <button onclick="switchCategory('review')" id="tab-review" class="category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-amber-300 hover:bg-slate-700 transition-all">
+        ⭐ 복습 보관함 (<span id="review-badge-count">0</span>)
+      </button>
+    </div>
+
+    <!-- 현재 카테고리 설명 & 전체 일괄 재생 바 -->
+    <div class="mt-3 p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+      <div>
+        <h2 id="current-cat-title" class="font-bold text-slate-200 text-base flex items-center gap-2">
+          <span>Day 1</span> <span class="text-xs text-blue-400 font-normal">원어민 일상 다빈도 핵심 구동사</span>
+        </h2>
+        <p class="text-xs text-slate-400 mt-0.5">문장당 1,000회 집중 훈련 또는 전체 문장 연속 루프를 실행할 수 있습니다.</p>
+      </div>
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <button onclick="toggleAllSequentialLoop()" id="btn-all-loop" class="flex-1 sm:flex-initial px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:from-emerald-700 active:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5">
+          <span>🔁 이 탭 전체 순차 반복</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 문장 카드 렌더링 컨테이너 -->
+  <main class="max-w-4xl mx-auto w-full px-4 mt-4 flex-1">
+    <div id="card-container" class="space-y-4">
+      <!-- 자바스크립트로 동적 렌더링 -->
+    </div>
+  </main>
+
+  <!-- 하단 플로팅 고정 바 (직접 입력 & 화면 끄기 도구) -->
+  <div class="fixed bottom-4 inset-x-0 z-30 px-4">
+    <div class="max-w-md mx-auto bg-slate-800/90 backdrop-blur-md border border-slate-700/80 p-2 rounded-2xl shadow-2xl flex items-center justify-around gap-2">
+      <button onclick="openCustomModal()" class="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 rounded-xl text-xs font-bold transition-all">
+        <span>✍️ 문장 직접 추가</span>
+      </button>
+      <button onclick="toggleAllBlind()" class="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-xl text-xs font-bold transition-all">
+        <span id="all-blind-txt">👁️ 전체 가리기</span>
+      </button>
+      <button onclick="activateSleepCurtain()" class="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl text-xs font-bold transition-all">
+        <span>🔒 암전 잠금</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 직접 문장 입력 모달 -->
+  <div id="custom-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+          <span>✍️ 1,000회 반복용 나만의 문장 입력</span>
+        </h3>
+        <button onclick="closeCustomModal()" class="text-slate-400 hover:text-slate-200 text-xl font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1">영어 문장 (English)</label>
+          <input type="text" id="custom-input-en" placeholder="예: I need to wrap up this workout before 8 PM." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 transition-colors">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1">한국어 해석 (Korean)</label>
+          <input type="text" id="custom-input-ko" placeholder="예: 저녁 8시 전에는 이 운동을 마무리해야 해." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 transition-colors">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-400 mb-1">구동사 포인트 (선택 사항)</label>
+          <input type="text" id="custom-input-tag" placeholder="예: wrap up (끝내다, 마무리하다)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 transition-colors">
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="custom-save-review" class="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700" checked>
+          <label for="custom-save-review" class="text-xs text-slate-300 font-medium cursor-pointer">복습 보관함(⭐)에 영구 보관하기</label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeCustomModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all">취소</button>
+        <button onclick="executeCustomSentence()" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg transition-all">▶ 바로 1,000회 실행</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OLED 절전 암전 커튼 레이어 (더블 탭으로 해제) -->
+  <div id="dark-curtain" onclick="handleCurtainTap()">
+    <div class="text-center px-6 pointer-events-none">
+      <div class="w-3 h-3 rounded-full bg-blue-500 mx-auto mb-6 pulse-dot"></div>
+      <div id="curtain-phrase-en" class="text-slate-400 text-sm font-medium leading-relaxed max-w-sm mb-4">
+        Screen Dimmed for Energy Saving
+      </div>
+      <div id="curtain-phrase-ko" class="text-slate-600 text-xs mb-8">
+        배터리 절전 모드 실행 중
+      </div>
+      <div class="font-mono text-3xl font-extrabold text-blue-400/90 tracking-wider mb-8" id="curtain-counter-display">
+        0 / 1000
+      </div>
+      <div class="text-slate-700 text-xs border border-slate-800 px-4 py-2 rounded-full inline-block">
+        💡 화면을 빠르게 <b>두 번 톡톡(더블 탭)</b> 치면 켜집니다
+      </div>
+    </div>
+  </div>
+
+  <!-- 사운드 및 스크립트 로직 -->
+  <script>
+    /* ==========================================================================
+       1. 데이터셋 정의 (기존 노트북 맞춤형 라이프스타일 100% 반영 구동사)
+       - 운동/웨이트, 다이빙, 펜션 운영, 카페/식단, 일상 업무
+       ========================================================================== */
+    const dataset = {
+      day1: [
+        {
+          verb: "come up",
+          meaning: "예상치 못한 일이 갑자기 생기다 / 화제가 나오다",
+          en: "Something came up at the pension, so I have to adjust my workout routine today.",
+          ko: "펜션에 갑자기 급한 일이 생겨서, 오늘 운동 루틴을 좀 조정해야겠어."
+        },
+        {
+          verb: "stick to",
+          meaning: "원래 계획이나 식단, 원칙을 고수하다",
+          en: "I try to stick to my low carb diet even when I grab lunch with my friends.",
+          ko: "친구들과 점심을 먹을 때도 되도록 저탄수화물 식단 원칙을 지키려고 해."
+        },
+        {
+          verb: "wrap up",
+          meaning: "어떤 일이나 운동을 마무리짓다, 슬슬 끝내다",
+          en: "Let us wrap up this upper body workout before it gets too crowded.",
+          ko: "헬스장에 사람이 너무 많아지기 전에 상체 운동 슬슬 마무리하자."
+        },
+        {
+          verb: "cut back on",
+          meaning: "지출, 탄수화물, 섭취량 등을 의식적으로 줄이다",
+          en: "I am going to cut back on unnecessary snacks starting this Monday for my cutting phase.",
+          ko: "체지방 커팅을 위해 이번 주 월요일부터 군것질을 확실히 줄일 생각이야."
+        },
+        {
+          verb: "work out",
+          meaning: "헬스장에서 운동하다 / 일이 좋게 잘 풀리다",
+          en: "Everything will work out fine as long as we maintain our consistency.",
+          ko: "우리가 꾸준함만 계속 유지한다면 모든 일이 순조롭게 잘 풀릴 거야."
+        },
+        {
+          verb: "run out of",
+          meaning: "물건, 재고, 체력, 단백질 등이 다 떨어지다",
+          en: "We ran out of protein bars, so I need to pick some up at Traders.",
+          ko: "단백질 바가 다 떨어져서 트레이더스 가서 좀 사와야겠어."
+        }
+      ],
+      day2: [
+        {
+          verb: "check in / check out",
+          meaning: "입실 / 퇴실 수속을 밟다",
+          en: "The guests are scheduled to check in at three, so we need to clean the rooms by two.",
+          ko: "손님들이 3시에 입실할 예정이니, 2시까지는 객실 청소를 끝내야 해."
+        },
+        {
+          verb: "look after",
+          meaning: "손님, 시설, 반려동물 등을 세심하게 돌보고 챙기다",
+          en: "Could you look after the front desk while I inspect the outdoor barbecue area?",
+          ko: "내가 야외 바비큐장 점검하는 동안 안내 데스크 좀 봐줄 수 있어?"
+        },
+        {
+          verb: "take care of",
+          meaning: "예약 문제, 쓰레기 분리수거, 일거리 등을 처리하다",
+          en: "I will take care of the reservation inquiry right after finishing my coffee.",
+          ko: "아이스 아메리카노 한잔 마시고 바로 예약 문의 처리해 드릴게요."
+        },
+        {
+          verb: "deal with",
+          meaning: "갑작스러운 문제, 컴플레인, 상황을 다루고 해결하다",
+          en: "We know how to deal with unexpected boiler issues during the winter season.",
+          ko: "우리는 겨울철에 발생하는 갑작스러운 보일러 문제를 어떻게 해결해야 하는지 잘 알고 있어."
+        },
+        {
+          verb: "tidy up",
+          meaning: "주변이나 방, 카페 테이블을 깔끔하게 정리정돈하다",
+          en: "Please tidy up the living room before the next family arrives.",
+          ko: "다음 가족 손님이 도착하기 전에 거실 좀 깔끔하게 정돈해 주세요."
+        },
+        {
+          verb: "drop off",
+          meaning: "손님이나 짐을 특정 장소에 내려주다, 가져다주다",
+          en: "I can drop off the extra towels at room 201 on my way down.",
+          ko: "아래층으로 내려가는 길에 201호에 여분 수건 좀 가져다줄게."
+        }
+      ],
+      day3: [
+        {
+          verb: "warm up",
+          meaning: "운동이나 다이빙 전 몸을 풀고 준비운동하다",
+          en: "Make sure to warm up your shoulders and chest before your first heavy set.",
+          ko: "첫 번째 고중량 세트에 들어가기 전에 반드시 어깨와 가슴 워밍업을 해줘."
+        },
+        {
+          verb: "give up",
+          meaning: "숨 참기, 세트, 목표 등을 중간에 포기하다",
+          en: "Never give up when you feel the first contraction during static apnea.",
+          ko: "스태틱(숨 참기) 훈련 중 첫 번째 수축이 오더라도 절대 바로 포기하지 마."
+        },
+        {
+          verb: "pull off",
+          meaning: "어려운 목표, 다이빙 깊이, 개인 최고 기록을 기어코 해내다",
+          en: "He managed to pull off a four minute breath hold in the diving pool today.",
+          ko: "그는 오늘 잠수풀에서 기어코 4분 숨 참기 기록을 달성해냈어."
+        },
+        {
+          verb: "hang on",
+          meaning: "포기하지 않고 버티다 / 잠깐 기다리다",
+          en: "Hang on for just ten more seconds to finish this grueling treadmill sprint.",
+          ko: "이 힘든 트레드밀 전력 질주를 끝내려면 딱 10초만 더 버텨봐."
+        },
+        {
+          verb: "burn out",
+          meaning: "과도한 운동이나 무리한 일정으로 완전히 녹초가 되다",
+          en: "Take a full rest day every week so you do not burn out mentally and physically.",
+          ko: "정신적, 육체적으로 방전되지 않으려면 매주 하루는 온전히 휴식을 취해야 해."
+        },
+        {
+          verb: "keep up with",
+          meaning: "빠른 템포나 러닝 페이스를 뒤처지지 않고 따라가다",
+          en: "It is challenging to keep up with his pace during outdoor running.",
+          ko: "야외 러닝을 할 때 그의 페이스를 그대로 따라붙는 건 꽤 벅차."
+        }
+      ],
+      day4: [
+        {
+          verb: "bring up",
+          meaning: "대화 중 어떤 화제나 안건을 조심스럽게 꺼내다",
+          en: "I did not want to bring up work problems during our casual coffee chat.",
+          ko: "편하게 커피 마시는 자리에서 일 이야기를 굳이 꺼내고 싶지 않았어."
+        },
+        {
+          verb: "point out",
+          meaning: "놓친 점, 핵심 내용, 잘못된 자세를 짚어주다",
+          en: "Thank you for pointing out my elbow angle during the bench press.",
+          ko: "벤치프레스 할 때 내 팔꿈치 각도가 잘못된 걸 짚어줘서 고마워."
+        },
+        {
+          verb: "figure out",
+          meaning: "생각하고 고민하여 마침내 해결책이나 방법을 알아내다",
+          en: "I am trying to figure out how to speak natural English without translating in my head.",
+          ko: "머릿속으로 번역하지 않고 자연스럽게 영어가 튀어나오는 법을 터득하려 노력 중이야."
+        },
+        {
+          verb: "get along with",
+          meaning: "주변 사람, 모임 멤버들과 원만하게 잘 지내다",
+          en: "I easily get along with the people at the English conversation club.",
+          ko: "나는 영어회화 모임 사람들과 스스럼없이 아주 잘 어울려 지내."
+        },
+        {
+          verb: "count on",
+          meaning: "믿고 의지하다, 믿고 맡기다",
+          en: "You can always count on me if you need help with gym equipment.",
+          ko: "헬스장 기구 사용법에 도움이 필요하다면 언제든 나를 믿고 의지해도 돼."
+        },
+        {
+          verb: "back up",
+          meaning: "주장을 뒷받침하다 / 데이터를 백업해 두다 / 뒤로 물러서다",
+          en: "Always back up your files before updating the reservation system.",
+          ko: "예약 관리 프로그램을 업데이트하기 전에는 항상 데이터를 백업해 둬."
+        }
+      ]
+    };
+
+    /* ==========================================================================
+       2. 상태 관리 (State Management)
+       ========================================================================== */
+    const MAX_ROUNDS = 1000;
+    let currentCategoryKey = 'day1';
+    let reviewList = JSON.parse(localStorage.getItem('my_phrasal_verbs_review') || '[]');
+
+    let isPlaying = false;
+    let stopRequested = false;
+    let loopTimer = null;
+    let currentSentenceEn = "";
+    let activeCardId = null;
+
+    // 연속 전체 재생 모드 플래그
+    let isSequentialMode = false;
+    let sequentialQueue = [];
+    let sequentialIndex = 0;
+
+    // 음성 엔진 설정
+    let maleVoice = null;
+    let femaleVoice = null;
+    let selectedGender = 'male'; // 'male' | 'female'
+    let selectedRate = 0.85;     // 0.75, 0.85, 1.0, 1.25
+
+    // 화면 절전 더블 탭 감지
+    let lastTapTimestamp = 0;
+
+    /* ==========================================================================
+       3. Web Speech API 초기화 & 발음 보정
+       ========================================================================== */
+    function initVoices() {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return;
+
+      const usVoices = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US');
+      const allEnVoices = voices.filter(v => v.lang.startsWith('en'));
+      const pool = usVoices.length > 0 ? usVoices : allEnVoices;
+
+      maleVoice = pool.find(v => /david|guy|george|male/i.test(v.name)) || pool[0];
+      femaleVoice = pool.find(v => /female|zira|samantha|karen|victoria|jenny/i.test(v.name));
+      if (!femaleVoice) {
+        femaleVoice = pool.find(v => v !== maleVoice) || pool[0];
+      }
+    }
+    window.speechSynthesis.onvoiceschanged = initVoices;
+    initVoices();
+
+    // 프리다이빙 등 합성기 발음 보정
+    function cleanPronunciation(text) {
+      return text.replace(/freediving/gi, "free-diving")
+                 .replace(/Freediving/gi, "Free-diving");
+    }
+
+    /* ==========================================================================
+       4. 1000회 무한 반복 섀도잉 루프 코어 엔진
+       ========================================================================== */
+    function start1000SingleLoop(textEn, textKo, cardKey) {
+      emergencyStopAll();
+      isSequentialMode = false;
+      document.getElementById('btn-all-loop').classList.remove('ring-2', 'ring-emerald-400');
+
+      currentSentenceEn = textEn;
+      activeCardId = cardKey;
+
+      // 상단 배너 표시
+      showGlobalBanner(textEn);
+      updateCurtainInfo(textEn, textKo);
+
+      runAudioIteration(textEn, 0, () => {
+        finishPlayStatus("1,000회 완주 완료");
+      });
+    }
+
+    function runAudioIteration(textEn, currentRound, onComplete) {
+      if (stopRequested || currentRound >= MAX_ROUNDS) {
+        if (!stopRequested && onComplete) onComplete();
+        return;
+      }
+
+      currentRound++;
+      isPlaying = true;
+
+      // UI 카운트 갱신
+      updateUIBadgeCount(currentRound);
+
+      const utterance = new SpeechSynthesisUtterance(cleanPronunciation(textEn));
+      utterance.lang = 'en-US';
+      utterance.rate = selectedRate;
+
+      const isFem = (selectedGender === 'female');
+      utterance.voice = isFem ? femaleVoice : maleVoice;
+      utterance.pitch = isFem ? 1.05 : 0.88;
+
+      utterance.onend = () => {
+        if (stopRequested) return;
+        if (currentRound < MAX_ROUNDS) {
+          // 문장 사이 섀도잉 따라하기 정적 대기 시간 (약 0.75초)
+          const pauseMs = Math.max(400, Math.floor(750 / selectedRate));
+          loopTimer = setTimeout(() => {
+            runAudioIteration(textEn, currentRound, onComplete);
+          }, pauseMs);
+        } else {
+          isPlaying = false;
+          if (onComplete) onComplete();
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("TTS Error, retrying:", e);
+        if (!stopRequested && currentRound < MAX_ROUNDS) {
+          loopTimer = setTimeout(() => {
+            runAudioIteration(textEn, currentRound, onComplete);
+          }, 500);
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    /* ==========================================================================
+       5. 🔁 탭 전체 순차 반복 연속 재생 기능
+       ========================================================================== */
+    function toggleAllSequentialLoop() {
+      if (isSequentialMode) {
+        emergencyStopAll();
+        return;
+      }
+
+      emergencyStopAll();
+      const currentList = getActiveCategoryList();
+      if (!currentList || currentList.length === 0) {
+        showToast("재생할 문장이 없습니다.");
+        return;
+      }
+
+      isSequentialMode = true;
+      sequentialQueue = [...currentList];
+      sequentialIndex = 0;
+
+      const btn = document.getElementById('btn-all-loop');
+      btn.innerHTML = `<span>⏹️ 순차 반복 중단</span>`;
+      btn.classList.add('ring-2', 'ring-emerald-400', 'bg-rose-700');
+
+      playNextInSequence();
+    }
+
+    function playNextInSequence() {
+      if (stopRequested || !isSequentialMode) return;
+
+      if (sequentialIndex >= sequentialQueue.length) {
+        sequentialIndex = 0; // 목록 끝에 도달하면 처음부터 무한 순환
+      }
+
+      const item = sequentialQueue[sequentialIndex];
+      const cardKey = `card_${currentCategoryKey}_${sequentialIndex}`;
+      activeCardId = cardKey;
+      currentSentenceEn = item.en;
+
+      showGlobalBanner(`[순차 재생 ${sequentialIndex + 1}/${sequentialQueue.length}] ${item.en}`);
+      updateCurtainInfo(item.en, item.ko);
+
+      // 각 문장을 3회 연속 읽고 다음 문장으로 순차 이동 (다양한 표현 쉐도잉)
+      let innerCount = 0;
+      const roundsPerSentence = 3;
+
+      function sequenceInnerLoop() {
+        if (stopRequested || !isSequentialMode) return;
+        innerCount++;
+        updateUIBadgeCount(`${sequentialIndex + 1}/${sequentialQueue.length} (${innerCount}/${roundsPerSentence}회)`);
+
+        const u = new SpeechSynthesisUtterance(cleanPronunciation(item.en));
+        u.lang = 'en-US';
+        u.rate = selectedRate;
+        u.voice = (selectedGender === 'female') ? femaleVoice : maleVoice;
+        u.pitch = (selectedGender === 'female') ? 1.05 : 0.88;
+
+        u.onend = () => {
+          if (stopRequested || !isSequentialMode) return;
+          if (innerCount < roundsPerSentence) {
+            loopTimer = setTimeout(sequenceInnerLoop, 700);
+          } else {
+            sequentialIndex++;
+            loopTimer = setTimeout(playNextInSequence, 1200); // 문장 전환 간격
+          }
+        };
+        u.onerror = () => {
+          sequentialIndex++;
+          playNextInSequence();
+        };
+
+        window.speechSynthesis.speak(u);
+      }
+
+      sequenceInnerLoop();
+    }
+
+    /* ==========================================================================
+       6. 정지 및 초기화 로직
+       ========================================================================== */
+    function emergencyStopAll() {
+      stopRequested = true;
+      isPlaying = false;
+      isSequentialMode = false;
+
+      clearTimeout(loopTimer);
+      window.speechSynthesis.cancel();
+
+      // UI 갱신
+      const banner = document.getElementById('global-player-banner');
+      if (banner) banner.classList.add('hidden');
+
+      const btnAll = document.getElementById('btn-all-loop');
+      if (btnAll) {
+        btnAll.innerHTML = `<span>🔁 이 탭 전체 순차 반복</span>`;
+        btnAll.classList.remove('ring-2', 'ring-emerald-400', 'bg-rose-700');
+      }
+
+      document.getElementById('curtain-counter-display').innerText = "정지됨";
+      
+      // 카드 개별 상태 텍스트 리셋
+      document.querySelectorAll('.card-status-label').forEach(el => {
+        if (el.innerText.includes('회')) el.innerText = "정지됨";
+      });
+
+      setTimeout(() => { stopRequested = false; }, 100);
+    }
+
+    function finishPlayStatus(msg) {
+      document.getElementById('global-counter-badge').innerText = msg;
+      document.getElementById('curtain-counter-display').innerText = msg;
+      if (activeCardId) {
+        const lbl = document.getElementById(`status_${activeCardId}`);
+        if (lbl) lbl.innerText = msg;
+      }
+    }
+
+    function updateUIBadgeCount(countVal) {
+      const badge = document.getElementById('global-counter-badge');
+      const curtainCounter = document.getElementById('curtain-counter-display');
+      const txt = (typeof countVal === 'number') ? `${countVal} / 1000` : countVal;
+
+      if (badge) badge.innerText = txt;
+      if (curtainCounter) curtainCounter.innerText = txt;
+
+      if (activeCardId) {
+        const lbl = document.getElementById(`status_${activeCardId}`);
+        if (lbl) lbl.innerText = (typeof countVal === 'number') ? `${countVal}/1000회` : countVal;
+      }
+    }
+
+    function showGlobalBanner(text) {
+      const banner = document.getElementById('global-player-banner');
+      banner.classList.remove('hidden');
+      document.getElementById('global-current-title').innerText = text;
+    }
+
+    /* ==========================================================================
+       7. UI 컨트롤 토글러 (배속, 남/여, 블라인드)
+       ========================================================================== */
+    function toggleVoiceGender(btn) {
+      if (selectedGender === 'male') {
+        selectedGender = 'female';
+        btn.innerText = "👩 여성 음성";
+      } else {
+        selectedGender = 'male';
+        btn.innerText = "👨 남성 음성";
+      }
+      showToast(`${btn.innerText}으로 전환되었습니다.`);
+    }
+
+    function togglePlaybackRate(btn) {
+      if (selectedRate === 0.85) {
+        selectedRate = 1.0;
+        btn.innerText = "1.0x (보통)";
+      } else if (selectedRate === 1.0) {
+        selectedRate = 1.25;
+        btn.innerText = "1.25x (빠름)";
+      } else if (selectedRate === 1.25) {
+        selectedRate = 0.75;
+        btn.innerText = "0.75x (느림)";
+      } else {
+        selectedRate = 0.85;
+        btn.innerText = "0.85x (기본)";
+      }
+      showToast(`재생 속도: ${btn.innerText}`);
+    }
+
+    function toggleSentenceBlind(eid, btn) {
+      const el = document.getElementById(eid);
+      if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        btn.innerText = "🙈 가리기";
+      } else {
+        el.classList.add('hidden');
+        btn.innerText = "👁️ 영작 확인";
+      }
+    }
+
+    let isAllBlindHidden = false;
+    function toggleAllBlind() {
+      isAllBlindHidden = !isAllBlindHidden;
+      document.querySelectorAll('.sentence-en-box').forEach(el => {
+        if (isAllBlindHidden) {
+          el.classList.add('hidden');
+        } else {
+          el.classList.remove('hidden');
+        }
+      });
+      document.querySelectorAll('.btn-blind-toggle').forEach(btn => {
+        btn.innerText = isAllBlindHidden ? "👁️ 영작 확인" : "🙈 가리기";
+      });
+      document.getElementById('all-blind-txt').innerText = isAllBlindHidden ? "👁️ 전체 보이기" : "👁️ 전체 가리기";
+      showToast(isAllBlindHidden ? "모든 영문이 가려졌습니다. 한국어를 보고 말해보세요!" : "모든 영문이 표시됩니다.");
+    }
+
+    /* ==========================================================================
+       8. 복습 보관함 (LocalStorage 영구 연동)
+       ========================================================================== */
+    function toggleReview(verb, en, ko, btn) {
+      const idx = reviewList.findIndex(item => item.en === en);
+      if (idx > -1) {
+        reviewList.splice(idx, 1);
+        btn.innerHTML = `<span>⭐ 복습</span>`;
+        btn.classList.remove('bg-amber-500/20', 'text-amber-300', 'border-amber-400');
+        showToast("복습함에서 제외되었습니다.");
+      } else {
+        reviewList.push({ verb, en, ko });
+        btn.innerHTML = `<span>★ 담김</span>`;
+        btn.classList.add('bg-amber-500/20', 'text-amber-300', 'border-amber-400');
+        showToast("⭐ 복습 보관함에 저장되었습니다.");
+      }
+      saveReviewStorage();
+      if (currentCategoryKey === 'review') {
+        renderCards();
+      }
+    }
+
+    function saveReviewStorage() {
+      localStorage.setItem('my_phrasal_verbs_review', JSON.stringify(reviewList));
+      document.getElementById('review-badge-count').innerText = reviewList.length;
+    }
+
+    /* ==========================================================================
+       9. 나만의 문장 직접 입력 모달 처리
+       ========================================================================== */
+    function openCustomModal() {
+      emergencyStopAll();
+      document.getElementById('custom-modal').classList.remove('hidden');
+      document.getElementById('custom-input-en').focus();
+    }
+
+    function closeCustomModal() {
+      document.getElementById('custom-modal').classList.add('hidden');
+    }
+
+    function executeCustomSentence() {
+      const en = document.getElementById('custom-input-en').value.trim();
+      const ko = document.getElementById('custom-input-ko').value.trim() || "내가 직접 추가한 훈련 문장";
+      const tag = document.getElementById('custom-input-tag').value.trim() || "Custom Phrasal Verb";
+      const saveToReview = document.getElementById('custom-save-review').checked;
+
+      if (!en) {
+        showToast("영어 문장을 입력해 주세요.");
+        return;
+      }
+
+      if (saveToReview) {
+        const exists = reviewList.some(item => item.en.toLowerCase() === en.toLowerCase());
+        if (!exists) {
+          reviewList.push({ verb: tag, en: en, ko: ko });
+          saveReviewStorage();
+        }
+      }
+
+      closeCustomModal();
+      document.getElementById('custom-input-en').value = "";
+      document.getElementById('custom-input-ko').value = "";
+      document.getElementById('custom-input-tag').value = "";
+
+      showToast("입력한 문장으로 1,000회 반복을 시작합니다.");
+      start1000SingleLoop(en, ko, null);
+    }
+
+    /* ==========================================================================
+       10. OLED 배터리 절전 암전 커튼
+       ========================================================================== */
+    function activateSleepCurtain() {
+      const curtain = document.getElementById('dark-curtain');
+      curtain.style.display = 'flex';
+
+      // 화면 깨우기 락 유지
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(() => {});
+      }
+
+      // 전체 화면 요청 (모바일 브라우저 주소창 숨김)
+      const doc = document.documentElement;
+      if (doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+      else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen().catch(() => {});
+    }
+
+    function handleCurtainTap() {
+      const now = new Date().getTime();
+      if (now - lastTapTimestamp < 380) {
+        // 더블 탭 시 해제
+        document.getElementById('dark-curtain').style.display = 'none';
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen().catch(() => {});
+      }
+      lastTapTimestamp = now;
+    }
+
+    function updateCurtainInfo(en, ko) {
+      document.getElementById('curtain-phrase-en').innerText = en;
+      document.getElementById('curtain-phrase-ko').innerText = ko;
+    }
+
+    /* ==========================================================================
+       11. 카테고리 전환 및 카드 렌더링
+       ========================================================================== */
+    function switchCategory(catKey) {
+      emergencyStopAll();
+      currentCategoryKey = catKey;
+
+      document.querySelectorAll('.category-tab').forEach(b => {
+        b.className = 'category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all';
+      });
+
+      const activeTab = document.getElementById(`tab-${catKey}`);
+      if (activeTab) {
+        activeTab.className = 'category-tab shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white shadow-md transition-all';
+      }
+
+      const titles = {
+        day1: { t: "Day 1", d: "원어민 일상 다빈도 핵심 구동사 (come up, stick to, wrap up 등)" },
+        day2: { t: "Day 2", d: "펜션 운영 & 숙박 시설 손님 응대 구동사 (check in, look after, deal with 등)" },
+        day3: { t: "Day 3", d: "헬스/웨이트 & 프리다이빙 도전 구동사 (warm up, pull off, burn out 등)" },
+        day4: { t: "Day 4", d: "소통 & 인간관계 실전 구동사 (bring up, point out, figure out 등)" },
+        review: { t: "⭐ 복습 보관함", d: "내가 직접 담은 집중 훈련 구동사 문장 모음" }
+      };
+
+      document.getElementById('current-cat-title').innerHTML = `
+        <span>${titles[catKey].t}</span> <span class="text-xs text-blue-400 font-normal">${titles[catKey].d}</span>
+      `;
+
+      renderCards();
+    }
+
+    function getActiveCategoryList() {
+      if (currentCategoryKey === 'review') return reviewList;
+      return dataset[currentCategoryKey] || [];
+    }
+
+    function renderCards() {
+      const container = document.getElementById('card-container');
+      container.innerHTML = "";
+      const list = getActiveCategoryList();
+
+      if (currentCategoryKey === 'review' && list.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-16 px-4 bg-slate-800/40 border border-dashed border-slate-700 rounded-3xl">
+            <div class="text-4xl mb-3">⭐</div>
+            <h4 class="font-bold text-slate-300 text-base mb-1">복습 보관함이 비어 있습니다</h4>
+            <p class="text-xs text-slate-500 mb-4 max-w-sm mx-auto">Day 1 ~ Day 4 목록에서 헷갈리는 문장의 [⭐ 복습] 버튼을 누르거나, 하단 [✍️ 문장 직접 추가]를 활용해 나만의 문장을 담아보세요.</p>
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach((item, idx) => {
+        const cardKey = `card_${currentCategoryKey}_${idx}`;
+        const eid = `en_${cardKey}`;
+        const isFav = reviewList.some(r => r.en === item.en);
+
+        const card = document.createElement('article');
+        card.className = "bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-600 transition-all";
+        
+        card.innerHTML = `
+          <!-- 구동사 헤더 태그 -->
+          <div class="flex items-center justify-between gap-2 mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-lg text-xs font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                ${item.verb}
+              </span>
+              <span class="text-xs text-slate-400 font-medium">${item.meaning || ''}</span>
+            </div>
+            <span id="status_${cardKey}" class="card-status-label text-xs font-mono font-bold text-emerald-400 min-w-[70px] text-right"></span>
+          </div>
+
+          <!-- 문장 본문 영역 -->
+          <div class="space-y-1.5 mb-4">
+            <div class="text-sm sm:text-base font-semibold text-slate-200 leading-snug">
+              🇰🇷 ${item.ko}
+            </div>
+            <div id="${eid}" class="sentence-en-box text-sm sm:text-base font-bold text-blue-300 leading-snug">
+              🇺🇸 ${item.en}
+            </div>
+          </div>
+
+          <!-- 컨트롤러 버튼 툴바 -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/60">
+            <!-- 좌측 옵션 버튼군 -->
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="toggleSentenceBlind('${eid}', this)" class="btn-blind-toggle px-2.5 py-1.5 bg-slate-700/70 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-all">
+                🙈 가리기
+              </button>
+              <button onclick="toggleReview('${item.verb.replace(/'/g, "\\'")}', '${item.en.replace(/'/g, "\\'")}', '${item.ko.replace(/'/g, "\\'")}', this)" class="px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${isFav ? 'bg-amber-500/20 text-amber-300 border-amber-400' : 'bg-slate-700/70 border-slate-600 text-slate-300 hover:bg-slate-700'}">
+                <span>${isFav ? '★ 담김' : '⭐ 복습'}</span>
+              </button>
+              <button onclick="toggleVoiceGender(this)" class="px-2.5 py-1.5 bg-slate-700/70 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-all">
+                ${selectedGender === 'male' ? '👨 남성 음성' : '👩 여성 음성'}
+              </button>
+              <button onclick="togglePlaybackRate(this)" class="px-2.5 py-1.5 bg-slate-700/70 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-all">
+                ${selectedRate}x
+              </button>
+            </div>
+
+            <!-- 우측 재생/정지 액션 -->
+            <div class="flex items-center gap-1.5">
+              <button onclick="start1000SingleLoop('${item.en.replace(/'/g, "\\'")}', '${item.ko.replace(/'/g, "\\'")}', '${cardKey}')" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold shadow transition-all flex items-center gap-1">
+                <span>▶ 1000회</span>
+              </button>
+              <button onclick="emergencyStopAll()" class="px-3 py-1.5 bg-rose-600/80 hover:bg-rose-600 active:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all">
+                정지
+              </button>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    /* 토스트 알림 메시지 */
+    function showToast(msg) {
+      let toast = document.getElementById('toast-msg');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-msg';
+        toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 text-slate-200 text-xs font-bold px-4 py-2 rounded-full shadow-2xl transition-opacity duration-300 pointer-events-none opacity-0';
+        document.body.appendChild(toast);
+      }
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2000);
+    }
+
+    /* 초기 실행 */
+    window.onload = function() {
+      saveReviewStorage();
+      renderCards();
+    };
+  </script>
+</body>
+</html>
