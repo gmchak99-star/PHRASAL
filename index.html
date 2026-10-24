@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실전 구동사 청크 1,000회 트레이너</title>
+  <title>실전 구동사 청크 분할 낭독 트레이너</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -193,15 +193,15 @@
       line-height: 1.4;
     }
 
-    /* 청크 스타일 */
+    /* 청크 스타일 및 발화 하이라이트 */
     .en-box {
       background: #090d16;
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 12px 14px;
       margin-bottom: 10px;
       font-size: 1.05rem;
       font-weight: 600;
-      line-height: 1.55;
+      line-height: 1.6;
       user-select: text;
     }
     .en-box.blind .chunk {
@@ -211,9 +211,15 @@
     }
     .chunk {
       display: inline-block;
-      margin-right: 3px;
-      padding: 0 2px;
-      border-radius: 3px;
+      margin-right: 4px;
+      padding: 1px 4px;
+      border-radius: 4px;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .chunk.active-spoken {
+      background: rgba(255, 255, 255, 0.22);
+      transform: scale(1.04);
+      outline: 1px solid var(--accent);
     }
     .chunk-subj { color: var(--c-subj); }
     .chunk-verb { color: var(--c-verb); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
@@ -283,7 +289,7 @@
       gap: 6px;
     }
 
-    /* 완전 암전 OLED 화면 커튼 */
+    /* OLED 암전 커튼 */
     #dark-curtain {
       position: fixed;
       top: 0; left: 0; width: 100vw; height: 100vh;
@@ -319,8 +325,8 @@
 <body>
 
   <header>
-    <h1>🔥 실전 구동사 청크 1,000회 트레이너</h1>
-    <p class="desc">색상 청크 어순 체화 | 셔플 & 동의·반의어 | 1,000회 무한 루프</p>
+    <h1>🔥 실전 구동사 청크 분할 낭독 트레이너</h1>
+    <p class="desc">청크별 리듬 끊어 읽기 | 0.28s 호흡 포즈 | 1,000회 무한 루프</p>
   </header>
 
   <!-- Web AudioContext 오디오 언락 & TTS 초기화 모듈 -->
@@ -380,7 +386,6 @@
           if (audioCtx.state === 'suspended') {
             audioCtx.resume();
           }
-          // 극미세 무음 신호로 하드웨어 오디오 채널 개방
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           gain.gain.value = 0.001;
@@ -390,7 +395,7 @@
           osc.stop(0.05);
         }
       } catch (e) {
-        console.warn("AudioContext error bypass:", e);
+        console.warn("AudioContext bypass:", e);
       }
 
       window.speechSynthesis.cancel();
@@ -405,7 +410,6 @@
       alert("🔊 브라우저 스피커가 강제 활성화되었습니다! 문장을 재생해보세요.");
     }
 
-    // 재생 시 자동 호출되는 오디오 채널 언락
     function ensureAudioUnlocked() {
       if (!audioUnlocked) {
         try {
@@ -417,7 +421,7 @@
     }
 
     /* ==========================================================================
-       구동사 데이터베이스 (청크 구분, 이모지, 5개 유사/반대어 내장)
+       구동사 데이터베이스 (청크 구분, 이모지, 유사/반대어 텍스트)
        ========================================================================== */
     const phrasalDB = {
       daily: [
@@ -650,17 +654,16 @@
     };
 
     /* ==========================================================================
-       앱 상태 및 핵심 TTS 엔진
+       앱 상태 및 청크 분할 TTS 엔진
        ========================================================================== */
     let curCat = 'daily';
-    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v3') || '[]');
+    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v4') || '[]');
     let currentVoiceGender = 'male';
     let currentRate = 0.85;
     let isGlobalStopped = false;
     let activeLoopTimer = null;
     const TARGET_REPEAT = 1000;
 
-    // 미국 원어민 음성 매칭
     function getSelectedVoice() {
       const voices = window.speechSynthesis.getVoices();
       if (!voices || voices.length === 0) return null;
@@ -676,35 +679,101 @@
     }
     window.speechSynthesis.onvoiceschanged = () => { getSelectedVoice(); };
 
-    // 발음 왜곡 필터링
     function sanitizeForSpeech(text) {
       return text.replace(/freediving/gi, "free diving")
                  .replace(/Freediving/gi, "Free diving")
                  .replace(/low-carb/gi, "low carb");
     }
 
-    // 전체 영문 문장 합치기
     function getFullSentence(item) {
       return item.chunks.map(c => c.text).join(' ');
     }
 
-    // 1,000회 단일 문장 무한 루프
-    function play1000Times(fullEn, cardIdx) {
+    // [핵심 엔진] 문장 1개를 청크별로 쪼개어 읽어주는 비동기 함수
+    function speakSentenceByChunks(chunks, cardIdx, onComplete) {
+      let chunkIdx = 0;
+
+      function speakNextChunk() {
+        if (isGlobalStopped) return;
+
+        // 모든 청크 낭독 완료
+        if (chunkIdx >= chunks.length) {
+          // 하이라이트 초기화
+          clearChunkHighlight(cardIdx);
+          if (onComplete) onComplete();
+          return;
+        }
+
+        const chunkObj = chunks[chunkIdx];
+        highlightActiveChunk(cardIdx, chunkIdx);
+
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+
+        const cleanChunk = sanitizeForSpeech(chunkObj.text);
+        const u = new SpeechSynthesisUtterance(cleanChunk);
+        u.lang = 'en-US';
+        u.rate = currentRate;
+        u.volume = 1.0;
+        u.pitch = 1.0;
+
+        const v = getSelectedVoice();
+        if (v) u.voice = v;
+        window._activeUtterance = u;
+
+        u.onend = () => {
+          if (isGlobalStopped) return;
+          chunkIdx++;
+          // 청크와 청크 사이의 0.28초 호흡 포즈 (자연스러운 끊어 읽기)
+          activeLoopTimer = setTimeout(speakNextChunk, 280);
+        };
+
+        u.onerror = (e) => {
+          if (isGlobalStopped) return;
+          chunkIdx++;
+          activeLoopTimer = setTimeout(speakNextChunk, 200);
+        };
+
+        window.speechSynthesis.speak(u);
+      }
+
+      speakNextChunk();
+    }
+
+    // 청크 시각적 하이라이트 UI 함수
+    function highlightActiveChunk(cardIdx, chunkIdx) {
+      clearChunkHighlight(cardIdx);
+      const chunkSpan = document.getElementById(`chunk-${cardIdx}-${chunkIdx}`);
+      if (chunkSpan) chunkSpan.classList.add('active-spoken');
+    }
+
+    function clearChunkHighlight(cardIdx) {
+      const card = document.getElementById(`card-${cardIdx}`);
+      if (card) {
+        card.querySelectorAll('.chunk').forEach(el => el.classList.remove('active-spoken'));
+      }
+    }
+
+    // [1,000회 무한 반복 엔진 (청크 분할 연동)]
+    function play1000Times(itemIdx) {
       ensureAudioUnlocked();
       stopAllAudio();
       isGlobalStopped = false;
 
+      const list = getCurrentList();
+      const item = list[itemIdx];
+      const fullEn = getFullSentence(item);
+
       document.querySelectorAll('.card').forEach(c => c.classList.remove('playing'));
-      const activeCard = document.getElementById(`card-${cardIdx}`);
+      const activeCard = document.getElementById(`card-${itemIdx}`);
       if (activeCard) activeCard.classList.add('playing');
 
-      const statusEl = document.getElementById(`status-${cardIdx}`);
+      const statusEl = document.getElementById(`status-${itemIdx}`);
       const curtainText = document.getElementById('curtain-text');
       const curtainCount = document.getElementById('curtain-count');
 
       curtainText.innerText = fullEn;
       let count = 0;
-      const speechText = sanitizeForSpeech(fullEn);
 
       function runLoop() {
         if (isGlobalStopped || count >= TARGET_REPEAT) {
@@ -716,35 +785,13 @@
         if (statusEl) statusEl.innerText = `${count} / ${TARGET_REPEAT}`;
         curtainCount.innerText = `${count} / ${TARGET_REPEAT}`;
 
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-
-        const u = new SpeechSynthesisUtterance(speechText);
-        u.lang = 'en-US';
-        u.rate = currentRate;
-        u.volume = 1.0;
-        u.pitch = 1.0;
-
-        const v = getSelectedVoice();
-        if (v) u.voice = v;
-
-        window._activeUtterance = u; // 브라우저 GC 회수 방지
-
-        u.onend = () => {
+        // 청크 단위로 쪼개어 읽은 뒤, 0.85초 쉬고 다음 루프로 진입
+        speakSentenceByChunks(item.chunks, itemIdx, () => {
           if (!isGlobalStopped && count < TARGET_REPEAT) {
-            // 따라 말할 수 있는 0.75초 정적 텀
-            activeLoopTimer = setTimeout(runLoop, 750);
+            // 문장 전체 낭독 후 따라 말할 수 있는 0.85초 섀도잉 정적 텀
+            activeLoopTimer = setTimeout(runLoop, 850);
           }
-        };
-
-        u.onerror = (err) => {
-          console.warn("TTS Error bypass:", err);
-          if (!isGlobalStopped && count < TARGET_REPEAT) {
-            activeLoopTimer = setTimeout(runLoop, 400);
-          }
-        };
-
-        window.speechSynthesis.speak(u);
+        });
       }
 
       runLoop();
@@ -765,7 +812,6 @@
 
         const item = list[idx];
         const fullEn = getFullSentence(item);
-        const speechText = sanitizeForSpeech(fullEn);
 
         document.querySelectorAll('.card').forEach(c => c.classList.remove('playing'));
         const activeCard = document.getElementById(`card-${idx}`);
@@ -777,34 +823,12 @@
         document.getElementById('curtain-text').innerText = fullEn;
         document.getElementById('curtain-count').innerText = `문장 ${idx + 1} / ${list.length}`;
 
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-
-        const u = new SpeechSynthesisUtterance(speechText);
-        u.lang = 'en-US';
-        u.rate = currentRate;
-        u.volume = 1.0;
-        u.pitch = 1.0;
-        const v = getSelectedVoice();
-        if (v) u.voice = v;
-
-        window._activeUtterance = u;
-
-        u.onend = () => {
+        speakSentenceByChunks(item.chunks, idx, () => {
           if (!isGlobalStopped) {
             idx++;
             activeLoopTimer = setTimeout(playNextSentence, 900);
           }
-        };
-
-        u.onerror = () => {
-          if (!isGlobalStopped) {
-            idx++;
-            activeLoopTimer = setTimeout(playNextSentence, 500);
-          }
-        };
-
-        window.speechSynthesis.speak(u);
+        });
       }
 
       playNextSentence();
@@ -817,16 +841,16 @@
       window.speechSynthesis.cancel();
       document.querySelectorAll('.card').forEach(c => c.classList.remove('playing'));
       document.querySelectorAll('.loop-status').forEach(s => s.innerText = "");
+      document.querySelectorAll('.chunk').forEach(el => el.classList.remove('active-spoken'));
     }
 
     /* ==========================================================================
-       셔플 및 리스트 렌더링
+       렌더링 및 UI 조작
        ========================================================================== */
     function getCurrentList() {
       return (curCat === 'review') ? reviewStore : phrasalDB[curCat];
     }
 
-    // 셔플 알고리즘 (Fisher-Yates)
     function shuffleCurrentList() {
       stopAllAudio();
       const list = getCurrentList();
@@ -855,12 +879,11 @@
         const fullEn = getFullSentence(item);
         const isFav = reviewStore.some(r => getFullSentence(r) === fullEn);
 
-        // 청크 HTML 빌드
-        const chunksHtml = item.chunks.map(c => {
-          return `<span class="chunk chunk-${c.type}">${c.text}</span>`;
+        // 청크별 span 및 ID 부여 (음성 연동 하이라이트용)
+        const chunksHtml = item.chunks.map((c, cIdx) => {
+          return `<span class="chunk chunk-${c.type}" id="chunk-${idx}-${cIdx}">${c.text}</span>`;
         }).join(' ');
 
-        // 동의어/반의어 텍스트 빌드
         const synTags = (item.synonyms || []).map(s => `<span class="meta-tag">${s}</span>`).join('');
         const antTags = (item.antonyms || []).map(a => `<span class="meta-tag">${a}</span>`).join('');
 
@@ -891,7 +914,7 @@
           <div class="card-actions">
             <button class="btn-act btn-fav ${isFav ? 'active' : ''}" onclick="toggleReview(${idx})">${isFav ? '★ 복습 중' : '⭐ 복습 담기'}</button>
             <button class="btn-act btn-blind-toggle" onclick="toggleBlind(${idx})">👁️ 가림 해제</button>
-            <button class="btn-act btn-play-1000" onclick="play1000Times('${fullEn.replace(/'/g, "\\'")}', ${idx})">▶ 1000회 반복</button>
+            <button class="btn-act btn-play-1000" onclick="play1000Times(${idx})">▶ 1000회 반복</button>
             <button class="btn-act btn-stop-card" onclick="stopAllAudio()">⏹️ 정지</button>
           </div>
         `;
@@ -922,7 +945,7 @@
       } else {
         reviewStore.push(target);
       }
-      localStorage.setItem('phrasal_reviews_v3', JSON.stringify(reviewStore));
+      localStorage.setItem('phrasal_reviews_v4', JSON.stringify(reviewStore));
       renderCards();
     }
 
@@ -963,7 +986,7 @@
       }
     }
 
-    /* OLED 절전 암전 커튼 모드 */
+    /* OLED 절전 암전 커튼 */
     let lastTap = 0;
     function openOledCurtain() {
       document.getElementById('dark-curtain').style.display = 'flex';
@@ -979,7 +1002,7 @@
       lastTap = now;
     }
 
-    // 초기 실행
+    // 초기 화면 렌더링
     renderCards();
   </script>
 </body>
