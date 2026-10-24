@@ -3,34 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실전 구동사 1,000회 무한 반복 플레이어</title>
+  <title>실전 구동사 청크 1,000회 트레이너</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text-main: #f8fafc;
+      --bg: #0b0f19;
+      --card-bg: #151e32;
+      --card-border: #233554;
+      --text-main: #f1f5f9;
       --text-sub: #94a3b8;
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
       --accent: #38bdf8;
       --danger: #ef4444;
       --success: #10b981;
+      
+      /* 청크 컬러 테마 */
+      --c-subj: #c084fc;   /* 연보라: 주어/시작구 */
+      --c-verb: #4ade80;   /* 연초록: 핵심 구동사 */
+      --c-obj: #38bdf8;    /* 하늘색: 목적어/보어 */
+      --c-mod: #fbbf24;    /* 주황노랑: 수식/전치사구 */
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
       background: var(--bg);
       color: var(--text-main);
-      padding: 14px;
-      padding-bottom: 90px;
-      max-width: 780px;
+      padding: 12px;
+      padding-bottom: 95px;
+      max-width: 760px;
       margin: 0 auto;
     }
-    header { text-align: center; margin-bottom: 14px; }
+
+    header { text-align: center; margin-bottom: 12px; }
     h1 { font-size: 1.35rem; font-weight: 800; color: #fff; margin-bottom: 4px; }
     p.desc { font-size: 0.8rem; color: var(--text-sub); }
 
-    /* 긴급 시스템 & 오디오 깨우기 바 */
+    /* Web AudioContext 오디오 언락 & TTS 초기화 모듈 바 */
     .audio-unlock-bar {
       background: #1e3a8a;
       border: 1px solid #3b82f6;
@@ -42,7 +51,7 @@
       justify-content: space-between;
       gap: 8px;
     }
-    .audio-unlock-bar span { font-size: 0.82rem; font-weight: 600; color: #bfdbfe; }
+    .audio-unlock-bar span { font-size: 0.82rem; font-weight: 700; color: #bfdbfe; }
     .btn-unlock {
       background: #60a5fa;
       color: #0f172a;
@@ -60,11 +69,11 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .tab-btn {
       background: var(--card-bg);
-      border: 1px solid #334155;
+      border: 1px solid var(--card-border);
       color: var(--text-sub);
       padding: 10px 4px;
       border-radius: 8px;
@@ -79,10 +88,10 @@
       color: #fff;
     }
 
-    /* 컨트롤 헤더 */
+    /* 상단 컨트롤 바 */
     .global-controls {
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid #334155;
+      background: rgba(21, 30, 50, 0.9);
+      border: 1px solid var(--card-border);
       border-radius: 10px;
       padding: 10px;
       display: flex;
@@ -94,59 +103,82 @@
     }
     .ctrl-group { display: flex; gap: 6px; align-items: center; }
     .btn-pill {
-      background: #334155;
-      border: 1px solid #475569;
-      color: #fff;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
       padding: 7px 10px;
       border-radius: 6px;
       font-size: 0.8rem;
       font-weight: 700;
       cursor: pointer;
     }
+    .btn-shuffle {
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      padding: 7px 11px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
     .btn-seq {
       background: #0284c7;
       color: #fff;
       border: none;
-      padding: 7px 12px;
+      padding: 7px 11px;
       border-radius: 6px;
       font-weight: 800;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       cursor: pointer;
     }
     .btn-emergency-stop {
       background: var(--danger);
       color: #fff;
       border: none;
-      padding: 7px 12px;
+      padding: 7px 11px;
       border-radius: 6px;
       font-weight: 800;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       cursor: pointer;
     }
 
     /* 문장 카드 */
     .card {
       background: var(--card-bg);
-      border: 1px solid #334155;
+      border: 1px solid var(--card-border);
       border-radius: 12px;
       padding: 14px;
-      margin-bottom: 10px;
-      transition: border-color 0.2s;
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
     }
-    .card.playing { border-color: var(--accent); box-shadow: 0 0 10px rgba(56, 189, 248, 0.25); }
+    .card.playing {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+    }
     .card-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+    }
+    .verb-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .verb-badge {
-      background: #0284c7;
-      color: #fff;
-      font-size: 0.78rem;
+      background: #0369a1;
+      color: #e0f2fe;
+      font-size: 0.82rem;
       font-weight: 800;
       padding: 3px 8px;
-      border-radius: 4px;
+      border-radius: 5px;
+    }
+    .verb-meaning {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      font-weight: 600;
     }
     .loop-status {
       font-size: 0.82rem;
@@ -156,26 +188,60 @@
     .ko-text {
       font-size: 0.95rem;
       font-weight: 700;
-      color: #e2e8f0;
-      margin-bottom: 8px;
-      line-height: 1.35;
-    }
-    .en-box {
-      background: #0f172a;
-      border-radius: 8px;
-      padding: 10px;
+      color: #f8fafc;
       margin-bottom: 10px;
-      font-size: 1.02rem;
-      font-weight: 600;
-      color: #38bdf8;
       line-height: 1.4;
+    }
+
+    /* 청크 스타일 */
+    .en-box {
+      background: #090d16;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      line-height: 1.55;
       user-select: text;
     }
-    .en-box.blind {
+    .en-box.blind .chunk {
       filter: blur(5px);
       user-select: none;
-      opacity: 0.4;
+      opacity: 0.3;
     }
+    .chunk {
+      display: inline-block;
+      margin-right: 3px;
+      padding: 0 2px;
+      border-radius: 3px;
+    }
+    .chunk-subj { color: var(--c-subj); }
+    .chunk-verb { color: var(--c-verb); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+    .chunk-obj  { color: var(--c-obj); }
+    .chunk-mod  { color: var(--c-mod); }
+
+    /* 동의어/반의어 태그 박스 */
+    .meta-box {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      background: rgba(11, 15, 25, 0.6);
+      padding: 7px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-size: 0.75rem;
+    }
+    .meta-label { font-weight: 700; }
+    .meta-label.syn { color: #34d399; }
+    .meta-label.ant { color: #f87171; }
+    .meta-tag {
+      background: #1e293b;
+      color: #cbd5e1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
     .card-actions {
       display: flex;
       gap: 6px;
@@ -191,25 +257,25 @@
       font-weight: 700;
       cursor: pointer;
     }
-    .btn-blind-toggle { background: #475569; color: #fff; }
+    .btn-blind-toggle { background: #334155; color: #fff; }
     .btn-play-1000 { background: var(--primary); color: #fff; }
     .btn-stop-card { background: #475569; color: #fff; }
     .btn-fav { background: transparent; border: 1px solid #475569; color: #94a3b8; }
-    .btn-fav.active { background: #ca8a04; border-color: #ca8a04; color: #fff; }
+    .btn-fav.active { background: #d97706; border-color: #d97706; color: #fff; }
 
-    /* 화면끄기 절전 플로팅 버튼 */
+    /* 플로팅 화면끄기 버튼 */
     .floating-lock {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #0f172a;
+      bottom: 18px;
+      right: 18px;
+      background: #090d16;
       border: 2px solid var(--accent);
       color: var(--accent);
       padding: 10px 14px;
       border-radius: 30px;
       font-weight: 800;
       font-size: 0.85rem;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
       cursor: pointer;
       z-index: 1000;
       display: flex;
@@ -217,7 +283,7 @@
       gap: 6px;
     }
 
-    /* OLED 완벽 암전 화면 커튼 */
+    /* 완전 암전 OLED 화면 커튼 */
     #dark-curtain {
       position: fixed;
       top: 0; left: 0; width: 100vw; height: 100vh;
@@ -233,18 +299,19 @@
     }
     #dark-curtain .wake-hint {
       color: #334155;
-      font-size: 0.8rem;
-      margin-bottom: 20px;
+      font-size: 0.82rem;
+      margin-bottom: 24px;
     }
     #dark-curtain .curr-text {
-      color: #475569;
-      font-size: 1.05rem;
-      line-height: 1.4;
-      margin-bottom: 10px;
+      color: #64748b;
+      font-size: 1.1rem;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      max-width: 90%;
     }
     #dark-curtain .curr-count {
-      color: #1e3a8a;
-      font-size: 1.5rem;
+      color: #1d4ed8;
+      font-size: 1.7rem;
       font-weight: 800;
     }
   </style>
@@ -252,37 +319,38 @@
 <body>
 
   <header>
-    <h1>🔥 실전 구동사 1,000회 무한 루프</h1>
-    <p class="desc">헬스·다이빙·펜션·카페 맞춤 예문 | 1,000회 연속 섀도잉 플레이어</p>
+    <h1>🔥 실전 구동사 청크 1,000회 트레이너</h1>
+    <p class="desc">색상 청크 어순 체화 | 셔플 & 동의·반의어 | 1,000회 무한 루프</p>
   </header>
 
-  <!-- 오디오 사운드 언락 바 -->
+  <!-- Web AudioContext 오디오 언락 & TTS 초기화 모듈 -->
   <div class="audio-unlock-bar">
-    <span>🔊 소리가 안 나면 먼저 눌러주세요:</span>
+    <span>🔊 깃허브 웹소리가 안 나면 먼저 눌러주세요:</span>
     <button class="btn-unlock" onclick="forceUnlockAudio()">스피커 강제 깨우기</button>
   </div>
 
-  <!-- 탭 메뉴 -->
+  <!-- 탭 네비게이션 -->
   <div class="tab-nav">
     <button class="tab-btn active" onclick="switchCategory('daily')">🏋️ 일상·운동</button>
-    <button class="tab-btn" onclick="switchCategory('pension')">🏡 펜션·손님</button>
     <button class="tab-btn" onclick="switchCategory('challenge')">🌊 다이빙·도전</button>
+    <button class="tab-btn" onclick="switchCategory('pension')">🏡 펜션·업무</button>
     <button class="tab-btn" onclick="switchCategory('review')">⭐ 복습함 (<span id="rev-cnt">0</span>)</button>
   </div>
 
-  <!-- 상단 공용 컨트롤 -->
+  <!-- 상단 제어 바 -->
   <div class="global-controls">
     <div class="ctrl-group">
       <button class="btn-pill" id="g-voice" onclick="toggleGlobalVoice()">👨 남성 음성</button>
-      <button class="btn-pill" id="g-speed" onclick="toggleGlobalSpeed()">0.85x (표준)</button>
+      <button class="btn-pill" id="g-speed" onclick="toggleGlobalSpeed()">0.85x (기본)</button>
     </div>
     <div class="ctrl-group">
-      <button class="btn-seq" onclick="startSequentialPlay()">🔁 이 탭 전체 순차 반복</button>
+      <button class="btn-shuffle" onclick="shuffleCurrentList()">🔀 셔플 (랜덤)</button>
+      <button class="btn-seq" onclick="startSequentialPlay()">🔁 전체 순차</button>
       <button class="btn-emergency-stop" onclick="stopAllAudio()">⏹️ 정지</button>
     </div>
   </div>
 
-  <!-- 문장 리스트 영역 -->
+  <!-- 카드 렌더링 컨테이너 -->
   <div id="cards-container"></div>
 
   <!-- 플로팅 OLED 절전 버튼 -->
@@ -290,66 +358,40 @@
     🌙 화면 절전 (암전)
   </button>
 
-  <!-- 완전 암전 절전 커튼 (더블 탭 해제) -->
+  <!-- 완전 암전 절전 커튼 (더블 탭 복귀) -->
   <div id="dark-curtain" onclick="handleCurtainTap()">
-    <div class="wake-hint">화면을 빠르게 톡! 톡! 두 번 두드리면 복귀합니다</div>
-    <div class="curr-text" id="curtain-text">대기 중...</div>
+    <div class="wake-hint">💡 화면을 빠르게 톡! 톡! 두 번 두드리면 복귀합니다</div>
+    <div class="curr-text" id="curtain-text">재생 준비 완료</div>
     <div class="curr-count" id="curtain-count">0 / 1000</div>
   </div>
 
   <script>
-    // 1. 회원님 맞춤 라이프스타일 구동사 데이터베이스
-    const phrasalDB = {
-      daily: [
-        { verb: "stick to", en: "I always stick to my low carb diet and workout routine.", ko: "나는 항상 저탄수 식단과 운동 루틴을 엄격히 고수해." },
-        { verb: "work out", en: "I prefer to work out early in the morning before breakfast.", ko: "나는 아침 식사 전 이른 아침에 운동하는 걸 선호해." },
-        { verb: "cut back on", en: "I decided to cut back on refined carbs to drop body fat.", ko: "체지방을 감량하기 위해 정제 탄수화물을 줄이기로 결심했어." },
-        { verb: "wrap up", en: "Let's wrap up today's gym session with five sets of squats.", ko: "스쿼트 5세트로 오늘 헬스 세션을 슬슬 마무리하자." },
-        { verb: "look forward to", en: "I always look forward to having an iced Americano after training.", ko: "운동 끝나고 시원한 아이스 아메리카노 한잔 마시는 시간을 항상 고대해." },
-        { verb: "end up", en: "I ended up hitting personal records in deadlifts today.", ko: "오늘 결국 데드리프트에서 개인 신기록을 경신하게 되었어." }
-      ],
-      pension: [
-        { verb: "check in", en: "Guests are supposed to check in between three and nine PM.", ko: "손님들은 오후 3시에서 9시 사이에 체크인하기로 되어 있습니다." },
-        { verb: "look after", en: "I look after every corner of the pension to ensure cleanliness.", ko: "청결을 보장하기 위해 펜션의 구석구석을 꼼꼼하게 돌봅니다." },
-        { verb: "take care of", en: "I will take care of the barbecue grill setup right now.", ko: "바비큐 그릴 세팅은 제가 지금 바로 챙겨드리겠습니다." },
-        { verb: "deal with", en: "I have to deal with sudden schedule changes from visitors.", ko: "손님들의 갑작스러운 예약 일정 변경 건을 신속하게 처리해야 해." },
-        { verb: "drop off", en: "Could you drop off the extra towels at room number three?", ko: "3호실에 여분의 수건 좀 전달해 주실 수 있나요?" },
-        { verb: "show around", en: "Let me show you around the outdoor garden and facilities.", ko: "야외 정원과 편의시설 위치를 안내해 드리겠습니다." }
-      ],
-      challenge: [
-        { verb: "warm up", en: "Make sure to warm up thoroughly before entering the deep pool.", ko: "잠수풀 깊은 물에 들어가기 전에 반드시 몸을 충분히 풀어줘." },
-        { verb: "hang on", en: "Hang on for ten more seconds during your breath hold training.", ko: "숨 참기 훈련할 때 딱 10초만 더 버텨봐." },
-        { verb: "pull off", en: "Although the dive was challenging, we managed to pull it off.", ko: "다이빙이 까다로웠음에도 불구하고 우리는 멋지게 해냈어." },
-        { verb: "burn out", en: "Pace yourself so that you don't burn out too quickly in water.", ko: "물속에서 너무 일찍 지쳐 쓰러지지 않도록 체력을 잘 안배해." },
-        { verb: "give up", en: "I am never going to give up until I reach a four minute breath hold.", ko: "4분 숨 참기를 달성할 때까지는 절대로 포기하지 않을 거야." },
-        { verb: "figure out", en: "I need to figure out why my equalization fails below ten meters.", ko: "수심 10미터 아래에서 왜 이퀄라이징이 안 되는지 원인을 찾아내야 해." }
-      ]
-    };
+    /* ==========================================================================
+       [모듈] Web AudioContext 오디오 언락 & TTS 초기화 모듈
+       ========================================================================== */
+    let audioCtx = null;
+    let audioUnlocked = false;
 
-    let curCat = 'daily';
-    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews') || '[]');
-    let currentVoiceGender = 'male';
-    let currentRate = 0.85;
-    let isGlobalStopped = false;
-    let activeLoopTimer = null;
-    let currentLoopIndex = 0;
-    const TARGET_REPEAT = 1000;
-
-    // 2. [강력한 오디오 엔진] 하드웨어 사운드 채널 강제 언락
     function forceUnlockAudio() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (AudioCtx) {
-          const ctx = new AudioCtx();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          gain.gain.value = 0.01;
+          if (!audioCtx) audioCtx = new AudioCtx();
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          // 극미세 무음 신호로 하드웨어 오디오 채널 개방
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          gain.gain.value = 0.001;
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(audioCtx.destination);
           osc.start(0);
           osc.stop(0.05);
         }
-      } catch(e) {}
+      } catch (e) {
+        console.warn("AudioContext error bypass:", e);
+      }
 
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
@@ -359,10 +401,266 @@
       testUtter.rate = 1.0;
       testUtter.volume = 1.0;
       window.speechSynthesis.speak(testUtter);
-      alert("🔊 브라우저 스피커가 강제 활성화되었습니다! 문장 버튼을 눌러보세요.");
+      audioUnlocked = true;
+      alert("🔊 브라우저 스피커가 강제 활성화되었습니다! 문장을 재생해보세요.");
     }
 
-    // 3. 안정적인 원어민 보이스 매칭 함수
+    // 재생 시 자동 호출되는 오디오 채널 언락
+    function ensureAudioUnlocked() {
+      if (!audioUnlocked) {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx && !audioCtx) audioCtx = new AudioCtx();
+          if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        } catch(e) {}
+      }
+    }
+
+    /* ==========================================================================
+       구동사 데이터베이스 (청크 구분, 이모지, 5개 유사/반대어 내장)
+       ========================================================================== */
+    const phrasalDB = {
+      daily: [
+        {
+          verb: "stick to",
+          emoji: "🥩",
+          meaning: "고수하다, 끈기있게 지키다",
+          chunks: [
+            { text: "I always", type: "subj" },
+            { text: "stick to", type: "verb" },
+            { text: "my low-carb diet", type: "obj" },
+            { text: "and routine.", type: "mod" }
+          ],
+          ko: "나는 항상 내 저탄수 식단과 루틴을 엄격히 고수해.",
+          synonyms: ["adhere to", "cling to", "follow", "abide by"],
+          antonyms: ["give up", "abandon", "quit", "deviate"]
+        },
+        {
+          verb: "work out",
+          emoji: "🏋️",
+          meaning: "운동하다, 잘 풀리다",
+          chunks: [
+            { text: "I prefer to", type: "subj" },
+            { text: "work out", type: "verb" },
+            { text: "at the gym", type: "mod" },
+            { text: "every morning.", type: "mod" }
+          ],
+          ko: "나는 매일 아침 헬스장에서 운동하는 것을 선호해.",
+          synonyms: ["exercise", "train", "succeed", "pan out"],
+          antonyms: ["rest", "laze", "fail", "break down"]
+        },
+        {
+          verb: "cut back on",
+          emoji: "🥗",
+          meaning: "줄이다, 절감하다",
+          chunks: [
+            { text: "I decided to", type: "subj" },
+            { text: "cut back on", type: "verb" },
+            { text: "refined carbohydrates", type: "obj" },
+            { text: "this week.", type: "mod" }
+          ],
+          ko: "이번 주는 정제 탄수화물 섭취를 좀 줄이기로 결심했어.",
+          synonyms: ["reduce", "decrease", "cut down on", "curtail"],
+          antonyms: ["increase", "boost", "expand", "raise"]
+        },
+        {
+          verb: "wrap up",
+          emoji: "🏁",
+          meaning: "마무리 짓다, 끝내다",
+          chunks: [
+            { text: "Let's", type: "subj" },
+            { text: "wrap up", type: "verb" },
+            { text: "today's session", type: "obj" },
+            { text: "with heavy squats.", type: "mod" }
+          ],
+          ko: "오늘 세션은 고중량 스쿼트로 슬슬 마무리 짓자.",
+          synonyms: ["finish", "conclude", "complete", "finalize"],
+          antonyms: ["start", "begin", "initiate", "kick off"]
+        },
+        {
+          verb: "look forward to",
+          emoji: "☕",
+          meaning: "손꼽아 기다리다, 고대하다",
+          chunks: [
+            { text: "I always", type: "subj" },
+            { text: "look forward to", type: "verb" },
+            { text: "an iced Americano", type: "obj" },
+            { text: "after workouts.", type: "mod" }
+          ],
+          ko: "운동 끝난 후 마시는 아이스 아메리카노를 항상 고대해.",
+          synonyms: ["anticipate", "await", "expect eagerly"],
+          antonyms: ["dread", "fear", "be reluctant"]
+        },
+        {
+          verb: "burn out",
+          emoji: "🔥",
+          meaning: "에너지가 고갈되다, 지치다",
+          chunks: [
+            { text: "Pace yourself", type: "subj" },
+            { text: "so you don't burn out", type: "verb" },
+            { text: "during training.", type: "mod" }
+          ],
+          ko: "운동 도중 탈진하지 않도록 스스로 페이스를 잘 조절해.",
+          synonyms: ["exhaust", "wear out", "drain"],
+          antonyms: ["recharge", "energize", "revitalize", "refresh"]
+        }
+      ],
+      challenge: [
+        {
+          verb: "warm up",
+          emoji: "🏊",
+          meaning: "몸을 풀다, 준비 운동하다",
+          chunks: [
+            { text: "Make sure to", type: "subj" },
+            { text: "warm up", type: "verb" },
+            { text: "thoroughly", type: "mod" },
+            { text: "before the dive.", type: "mod" }
+          ],
+          ko: "다이빙 들어가기 전에 반드시 몸을 충분히 풀어줘.",
+          synonyms: ["stretch", "prepare", "loosen up", "prime"],
+          antonyms: ["cool down", "chill"]
+        },
+        {
+          verb: "hang on",
+          emoji: "⏱️",
+          meaning: "버티다, 꽉 쥐다",
+          chunks: [
+            { text: "Hang on", type: "verb" },
+            { text: "for ten more seconds", type: "mod" },
+            { text: "in the pool.", type: "mod" }
+          ],
+          ko: "잠수풀에서 딱 10초만 더 집중해서 버텨봐.",
+          synonyms: ["hold on", "endure", "persist", "withstand"],
+          antonyms: ["let go", "surrender", "give up", "yield"]
+        },
+        {
+          verb: "pull off",
+          emoji: "🎯",
+          meaning: "(어려운 일을) 멋지게 해내다",
+          chunks: [
+            { text: "We managed to", type: "subj" },
+            { text: "pull off", type: "verb" },
+            { text: "the deep dive", type: "obj" },
+            { text: "safely.", type: "mod" }
+          ],
+          ko: "우리는 그 깊은 수심 다이빙을 안전하게 멋지게 해냈어.",
+          synonyms: ["accomplish", "achieve", "execute", "succeed"],
+          antonyms: ["fail", "mess up", "botch", "lose"]
+        },
+        {
+          verb: "give up",
+          emoji: "🚫",
+          meaning: "포기하다, 굴복하다",
+          chunks: [
+            { text: "I am never going to", type: "subj" },
+            { text: "give up", type: "verb" },
+            { text: "on my personal record.", type: "mod" }
+          ],
+          ko: "나는 내 숨 참기 개인 신기록을 절대로 포기하지 않을 거야.",
+          synonyms: ["quit", "surrender", "abandon", "yield"],
+          antonyms: ["persist", "persevere", "keep up", "endure"]
+        },
+        {
+          verb: "figure out",
+          emoji: "💡",
+          meaning: "원인을 알아내다, 해결하다",
+          chunks: [
+            { text: "I need to", type: "subj" },
+            { text: "figure out", type: "verb" },
+            { text: "my equalization issue", type: "obj" },
+            { text: "underwater.", type: "mod" }
+          ],
+          ko: "물속에서 발생하는 내 이퀄라이징 문제 원인을 찾아내야 해.",
+          synonyms: ["solve", "understand", "comprehend", "resolve"],
+          antonyms: ["misunderstand", "confuse", "overlook"]
+        }
+      ],
+      pension: [
+        {
+          verb: "check in",
+          emoji: "🔑",
+          meaning: "체크인하다, 투숙 수속하다",
+          chunks: [
+            { text: "Guests are supposed to", type: "subj" },
+            { text: "check in", type: "verb" },
+            { text: "after three PM", type: "mod" },
+            { text: "today.", type: "mod" }
+          ],
+          ko: "손님들은 오늘 오후 3시 이후에 체크인하기로 되어 있습니다.",
+          synonyms: ["register", "arrive", "sign in"],
+          antonyms: ["check out", "leave", "depart"]
+        },
+        {
+          verb: "take care of",
+          emoji: "🍖",
+          meaning: "처리하다, 돌보다",
+          chunks: [
+            { text: "I will", type: "subj" },
+            { text: "take care of", type: "verb" },
+            { text: "the BBQ grill setup", type: "obj" },
+            { text: "right now.", type: "mod" }
+          ],
+          ko: "바비큐 그릴 세팅은 제가 지금 바로 준비해 드릴게요.",
+          synonyms: ["handle", "manage", "look after", "attend to"],
+          antonyms: ["neglect", "ignore", "overlook"]
+        },
+        {
+          verb: "deal with",
+          emoji: "📋",
+          meaning: "다루다, 처리하다",
+          chunks: [
+            { text: "I have to", type: "subj" },
+            { text: "deal with", type: "verb" },
+            { text: "sudden booking changes", type: "obj" },
+            { text: "promptly.", type: "mod" }
+          ],
+          ko: "갑작스러운 예약 변경 요청 건들을 신속하게 처리해야 해.",
+          synonyms: ["cope with", "tackle", "handle", "address"],
+          antonyms: ["avoid", "shirk", "neglect"]
+        },
+        {
+          verb: "drop off",
+          emoji: "🧺",
+          meaning: "가져다주다, 내려주다",
+          chunks: [
+            { text: "Could you", type: "subj" },
+            { text: "drop off", type: "verb" },
+            { text: "clean towels", type: "obj" },
+            { text: "at room two?", type: "mod" }
+          ],
+          ko: "2호실에 깨끗한 수건 좀 전달해 주실 수 있나요?",
+          synonyms: ["deliver", "leave", "hand over"],
+          antonyms: ["pick up", "collect", "retrieve"]
+        },
+        {
+          verb: "look after",
+          emoji: "🏡",
+          meaning: "보살피다, 관리하다",
+          chunks: [
+            { text: "I carefully", type: "subj" },
+            { text: "look after", type: "verb" },
+            { text: "every single corner", type: "obj" },
+            { text: "of the facility.", type: "mod" }
+          ],
+          ko: "펜션 시설의 구석구석을 꼼꼼하게 살피고 관리해.",
+          synonyms: ["care for", "mind", "watch over", "maintain"],
+          antonyms: ["neglect", "ignore", "abandon"]
+        }
+      ]
+    };
+
+    /* ==========================================================================
+       앱 상태 및 핵심 TTS 엔진
+       ========================================================================== */
+    let curCat = 'daily';
+    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v3') || '[]');
+    let currentVoiceGender = 'male';
+    let currentRate = 0.85;
+    let isGlobalStopped = false;
+    let activeLoopTimer = null;
+    const TARGET_REPEAT = 1000;
+
+    // 미국 원어민 음성 매칭
     function getSelectedVoice() {
       const voices = window.speechSynthesis.getVoices();
       if (!voices || voices.length === 0) return null;
@@ -378,18 +676,24 @@
     }
     window.speechSynthesis.onvoiceschanged = () => { getSelectedVoice(); };
 
-    // 4. 발음 교정 필터
+    // 발음 왜곡 필터링
     function sanitizeForSpeech(text) {
       return text.replace(/freediving/gi, "free diving")
-                 .replace(/Freediving/gi, "Free diving");
+                 .replace(/Freediving/gi, "Free diving")
+                 .replace(/low-carb/gi, "low carb");
     }
 
-    // 5. [핵심] 1,000회 단일 문장 무한 섀도잉 루프
-    function play1000Times(enText, cardIdx) {
+    // 전체 영문 문장 합치기
+    function getFullSentence(item) {
+      return item.chunks.map(c => c.text).join(' ');
+    }
+
+    // 1,000회 단일 문장 무한 루프
+    function play1000Times(fullEn, cardIdx) {
+      ensureAudioUnlocked();
       stopAllAudio();
       isGlobalStopped = false;
 
-      // 카드 하이라이트
       document.querySelectorAll('.card').forEach(c => c.classList.remove('playing'));
       const activeCard = document.getElementById(`card-${cardIdx}`);
       if (activeCard) activeCard.classList.add('playing');
@@ -398,9 +702,9 @@
       const curtainText = document.getElementById('curtain-text');
       const curtainCount = document.getElementById('curtain-count');
 
-      curtainText.innerText = enText;
+      curtainText.innerText = fullEn;
       let count = 0;
-      const speechText = sanitizeForSpeech(enText);
+      const speechText = sanitizeForSpeech(fullEn);
 
       function runLoop() {
         if (isGlobalStopped || count >= TARGET_REPEAT) {
@@ -412,7 +716,6 @@
         if (statusEl) statusEl.innerText = `${count} / ${TARGET_REPEAT}`;
         curtainCount.innerText = `${count} / ${TARGET_REPEAT}`;
 
-        // 브라우저 큐 비우고 재개
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
 
@@ -425,12 +728,11 @@
         const v = getSelectedVoice();
         if (v) u.voice = v;
 
-        // GC 인스턴스 보호
-        window._activeUtterance = u;
+        window._activeUtterance = u; // 브라우저 GC 회수 방지
 
         u.onend = () => {
           if (!isGlobalStopped && count < TARGET_REPEAT) {
-            // 따라 말할 수 있는 0.75초 정적 간격
+            // 따라 말할 수 있는 0.75초 정적 텀
             activeLoopTimer = setTimeout(runLoop, 750);
           }
         };
@@ -448,8 +750,9 @@
       runLoop();
     }
 
-    // 6. [전체 순차 반복 모드] 탭 내 모든 문장을 차례대로 무한 재생
+    // 전체 순차 반복 모드
     function startSequentialPlay() {
+      ensureAudioUnlocked();
       stopAllAudio();
       isGlobalStopped = false;
       const list = getCurrentList();
@@ -458,19 +761,20 @@
       let idx = 0;
       function playNextSentence() {
         if (isGlobalStopped) return;
-        if (idx >= list.length) idx = 0; // 끝까지 가면 다시 처음부터
+        if (idx >= list.length) idx = 0;
 
         const item = list[idx];
-        const speechText = sanitizeForSpeech(item.en);
+        const fullEn = getFullSentence(item);
+        const speechText = sanitizeForSpeech(fullEn);
 
         document.querySelectorAll('.card').forEach(c => c.classList.remove('playing'));
         const activeCard = document.getElementById(`card-${idx}`);
         if (activeCard) activeCard.classList.add('playing');
 
         const statusEl = document.getElementById(`status-${idx}`);
-        if (statusEl) statusEl.innerText = "순차 재생 중...";
+        if (statusEl) statusEl.innerText = "순차 반복 중...";
 
-        document.getElementById('curtain-text').innerText = item.en;
+        document.getElementById('curtain-text').innerText = fullEn;
         document.getElementById('curtain-count').innerText = `문장 ${idx + 1} / ${list.length}`;
 
         window.speechSynthesis.cancel();
@@ -506,7 +810,7 @@
       playNextSentence();
     }
 
-    // 7. 긴급 즉시 정지
+    // 긴급 정지
     function stopAllAudio() {
       isGlobalStopped = true;
       clearTimeout(activeLoopTimer);
@@ -515,9 +819,22 @@
       document.querySelectorAll('.loop-status').forEach(s => s.innerText = "");
     }
 
-    // 8. 뷰 렌더링 및 UI 조작
+    /* ==========================================================================
+       셔플 및 리스트 렌더링
+       ========================================================================== */
     function getCurrentList() {
       return (curCat === 'review') ? reviewStore : phrasalDB[curCat];
+    }
+
+    // 셔플 알고리즘 (Fisher-Yates)
+    function shuffleCurrentList() {
+      stopAllAudio();
+      const list = getCurrentList();
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      renderCards();
     }
 
     function renderCards() {
@@ -528,28 +845,53 @@
       document.getElementById('rev-cnt').innerText = reviewStore.length;
 
       if (list.length === 0 && curCat === 'review') {
-        container.innerHTML = `<div style="text-align:center; padding:40px 10px; color:#64748b;">
+        container.innerHTML = `<div style="text-align:center; padding:45px 12px; color:#64748b; font-size:0.9rem;">
           아직 복습함에 담긴 문장이 없습니다.<br>다른 탭에서 [⭐ 복습 담기]를 눌러보세요.
         </div>`;
         return;
       }
 
       list.forEach((item, idx) => {
-        const isFav = reviewStore.some(r => r.en === item.en);
+        const fullEn = getFullSentence(item);
+        const isFav = reviewStore.some(r => getFullSentence(r) === fullEn);
+
+        // 청크 HTML 빌드
+        const chunksHtml = item.chunks.map(c => {
+          return `<span class="chunk chunk-${c.type}">${c.text}</span>`;
+        }).join(' ');
+
+        // 동의어/반의어 텍스트 빌드
+        const synTags = (item.synonyms || []).map(s => `<span class="meta-tag">${s}</span>`).join('');
+        const antTags = (item.antonyms || []).map(a => `<span class="meta-tag">${a}</span>`).join('');
+
         const card = document.createElement('div');
         card.className = 'card';
         card.id = `card-${idx}`;
         card.innerHTML = `
           <div class="card-head">
-            <span class="verb-badge">${item.verb}</span>
+            <div class="verb-title">
+              <span style="font-size:1.15rem;">${item.emoji || '📌'}</span>
+              <span class="verb-badge">${item.verb}</span>
+              <span class="verb-meaning">${item.meaning}</span>
+            </div>
             <span class="loop-status" id="status-${idx}"></span>
           </div>
+
           <div class="ko-text">${item.ko}</div>
-          <div class="en-box blind" id="en-${idx}">${item.en}</div>
+
+          <div class="en-box blind" id="en-${idx}">
+            ${chunksHtml}
+          </div>
+
+          <div class="meta-box">
+            <span class="meta-label syn">유사:</span> ${synTags}
+            <span class="meta-label ant" style="margin-left:6px;">반대:</span> ${antTags}
+          </div>
+
           <div class="card-actions">
             <button class="btn-act btn-fav ${isFav ? 'active' : ''}" onclick="toggleReview(${idx})">${isFav ? '★ 복습 중' : '⭐ 복습 담기'}</button>
-            <button class="btn-act btn-blind-toggle" onclick="toggleBlind(${idx})">👁️ 정답 보기</button>
-            <button class="btn-act btn-play-1000" onclick="play1000Times('${item.en.replace(/'/g, "\\'")}', ${idx})">▶ 1000회 반복</button>
+            <button class="btn-act btn-blind-toggle" onclick="toggleBlind(${idx})">👁️ 가림 해제</button>
+            <button class="btn-act btn-play-1000" onclick="play1000Times('${fullEn.replace(/'/g, "\\'")}', ${idx})">▶ 1000회 반복</button>
             <button class="btn-act btn-stop-card" onclick="stopAllAudio()">⏹️ 정지</button>
           </div>
         `;
@@ -565,21 +907,22 @@
         btn.innerText = "🙈 가리기";
       } else {
         enEl.classList.add('blind');
-        btn.innerText = "👁️ 정답 보기";
+        btn.innerText = "👁️ 가림 해제";
       }
     }
 
     function toggleReview(idx) {
       const list = getCurrentList();
       const target = list[idx];
-      const foundIdx = reviewStore.findIndex(r => r.en === target.en);
+      const targetEn = getFullSentence(target);
+      const foundIdx = reviewStore.findIndex(r => getFullSentence(r) === targetEn);
 
       if (foundIdx > -1) {
         reviewStore.splice(foundIdx, 1);
       } else {
         reviewStore.push(target);
       }
-      localStorage.setItem('phrasal_reviews', JSON.stringify(reviewStore));
+      localStorage.setItem('phrasal_reviews_v3', JSON.stringify(reviewStore));
       renderCards();
     }
 
@@ -587,7 +930,7 @@
       stopAllAudio();
       curCat = cat;
       document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-        btn.classList.toggle('active', ['daily', 'pension', 'challenge', 'review'][i] === cat);
+        btn.classList.toggle('active', ['daily', 'challenge', 'pension', 'review'][i] === cat);
       });
       renderCards();
     }
@@ -607,7 +950,7 @@
       const btn = document.getElementById('g-speed');
       if (currentRate === 0.85) {
         currentRate = 1.0;
-        btn.innerText = "1.0x (보통)";
+        btn.innerText = "1.0x (표준)";
       } else if (currentRate === 1.0) {
         currentRate = 1.25;
         btn.innerText = "1.25x (빠름)";
@@ -616,11 +959,11 @@
         btn.innerText = "0.75x (느림)";
       } else {
         currentRate = 0.85;
-        btn.innerText = "0.85x (표준)";
+        btn.innerText = "0.85x (기본)";
       }
     }
 
-    // 9. OLED 절전 암전 모드 (더블 탭 복귀)
+    /* OLED 절전 암전 커튼 모드 */
     let lastTap = 0;
     function openOledCurtain() {
       document.getElementById('dark-curtain').style.display = 'flex';
