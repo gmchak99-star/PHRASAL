@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실전 구동사 청크 분할 낭독 트레이너</title>
+  <title>실전 구동사 청크 트레이너</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -101,7 +101,7 @@
       justify-content: space-between;
       margin-bottom: 14px;
     }
-    .ctrl-group { display: flex; gap: 6px; align-items: center; }
+    .ctrl-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .btn-pill {
       background: #1e293b;
       border: 1px solid #334155;
@@ -110,6 +110,16 @@
       border-radius: 6px;
       font-size: 0.8rem;
       font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-mode-toggle {
+      background: #0d9488;
+      border: 1px solid #14b8a6;
+      color: #fff;
+      padding: 7px 11px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 800;
       cursor: pointer;
     }
     .btn-shuffle {
@@ -193,7 +203,7 @@
       line-height: 1.4;
     }
 
-    /* 청크 스타일 및 발화 하이라이트 */
+    /* 청크 스타일 (색상은 그대로 유지) */
     .en-box {
       background: #090d16;
       border-radius: 8px;
@@ -325,8 +335,8 @@
 <body>
 
   <header>
-    <h1>🔥 실전 구동사 청크 분할 낭독 트레이너</h1>
-    <p class="desc">청크별 리듬 끊어 읽기 | 0.28s 호흡 포즈 | 1,000회 무한 루프</p>
+    <h1>🔥 실전 구동사 트레이너</h1>
+    <p class="desc">색상 청크 어순 체화 | 일반·청크 리듬 토글 | 1,000회 무한 루프</p>
   </header>
 
   <!-- Web AudioContext 오디오 언락 & TTS 초기화 모듈 -->
@@ -348,6 +358,8 @@
     <div class="ctrl-group">
       <button class="btn-pill" id="g-voice" onclick="toggleGlobalVoice()">👨 남성 음성</button>
       <button class="btn-pill" id="g-speed" onclick="toggleGlobalSpeed()">0.85x (기본)</button>
+      <!-- 읽기 모드 토글 버튼 (일반 통문장 / 청크 분할) -->
+      <button class="btn-mode-toggle" id="g-reading-mode" onclick="toggleReadingMode()">🗣️ 낭독: 일반 (자연스럽게)</button>
     </div>
     <div class="ctrl-group">
       <button class="btn-shuffle" onclick="shuffleCurrentList()">🔀 셔플 (랜덤)</button>
@@ -421,7 +433,7 @@
     }
 
     /* ==========================================================================
-       구동사 데이터베이스 (청크 구분, 이모지, 유사/반대어 텍스트)
+       구동사 데이터베이스
        ========================================================================== */
     const phrasalDB = {
       daily: [
@@ -654,12 +666,13 @@
     };
 
     /* ==========================================================================
-       앱 상태 및 청크 분할 TTS 엔진
+       앱 상태 및 스마트 TTS 낭독 엔진
        ========================================================================== */
     let curCat = 'daily';
-    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v4') || '[]');
+    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v5') || '[]');
     let currentVoiceGender = 'male';
     let currentRate = 0.85;
+    let readingMode = 'normal'; // 'normal' (일반 자연스러운 리듬) vs 'chunk' (청크 분절)
     let isGlobalStopped = false;
     let activeLoopTimer = null;
     const TARGET_REPEAT = 1000;
@@ -689,29 +702,32 @@
       return item.chunks.map(c => c.text).join(' ');
     }
 
-    // [핵심 엔진] 문장 1개를 청크별로 쪼개어 읽어주는 비동기 함수
-    function speakSentenceByChunks(chunks, cardIdx, onComplete) {
-      let chunkIdx = 0;
+    // 낭독 모드 토글 함수
+    function toggleReadingMode() {
+      const btn = document.getElementById('g-reading-mode');
+      if (readingMode === 'normal') {
+        readingMode = 'chunk';
+        btn.innerText = "✂️ 낭독: 청크 (끊어 읽기)";
+        btn.style.background = "#0284c7";
+        btn.style.borderColor = "#38bdf8";
+      } else {
+        readingMode = 'normal';
+        btn.innerText = "🗣️ 낭독: 일반 (자연스럽게)";
+        btn.style.background = "#0d9488";
+        btn.style.borderColor = "#14b8a6";
+      }
+    }
 
-      function speakNextChunk() {
-        if (isGlobalStopped) return;
-
-        // 모든 청크 낭독 완료
-        if (chunkIdx >= chunks.length) {
-          // 하이라이트 초기화
-          clearChunkHighlight(cardIdx);
-          if (onComplete) onComplete();
-          return;
-        }
-
-        const chunkObj = chunks[chunkIdx];
-        highlightActiveChunk(cardIdx, chunkIdx);
-
+    // [핵심 엔진] 모드에 따라 일반 통문장 또는 청크 분절로 읽어주는 통합 실행 함수
+    function speakAdaptive(item, cardIdx, onComplete) {
+      if (readingMode === 'normal') {
+        // [일반 모드] 물 흐르듯 통문장으로 자연스럽게 발화
+        clearChunkHighlight(cardIdx);
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
 
-        const cleanChunk = sanitizeForSpeech(chunkObj.text);
-        const u = new SpeechSynthesisUtterance(cleanChunk);
+        const fullEn = getFullSentence(item);
+        const u = new SpeechSynthesisUtterance(sanitizeForSpeech(fullEn));
         u.lang = 'en-US';
         u.rate = currentRate;
         u.volume = 1.0;
@@ -722,25 +738,56 @@
         window._activeUtterance = u;
 
         u.onend = () => {
-          if (isGlobalStopped) return;
-          chunkIdx++;
-          // 청크와 청크 사이의 0.28초 호흡 포즈 (자연스러운 끊어 읽기)
-          activeLoopTimer = setTimeout(speakNextChunk, 280);
+          if (!isGlobalStopped && onComplete) onComplete();
         };
-
-        u.onerror = (e) => {
-          if (isGlobalStopped) return;
-          chunkIdx++;
-          activeLoopTimer = setTimeout(speakNextChunk, 200);
+        u.onerror = () => {
+          if (!isGlobalStopped && onComplete) onComplete();
         };
 
         window.speechSynthesis.speak(u);
-      }
+      } else {
+        // [청크 모드] 청크 사이 0.28초 쉬어가며 분절 발화
+        let chunkIdx = 0;
+        function speakNextChunk() {
+          if (isGlobalStopped) return;
+          if (chunkIdx >= item.chunks.length) {
+            clearChunkHighlight(cardIdx);
+            if (onComplete) onComplete();
+            return;
+          }
 
-      speakNextChunk();
+          highlightActiveChunk(cardIdx, chunkIdx);
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.resume();
+
+          const chunkObj = item.chunks[chunkIdx];
+          const u = new SpeechSynthesisUtterance(sanitizeForSpeech(chunkObj.text));
+          u.lang = 'en-US';
+          u.rate = currentRate;
+          u.volume = 1.0;
+          u.pitch = 1.0;
+
+          const v = getSelectedVoice();
+          if (v) u.voice = v;
+          window._activeUtterance = u;
+
+          u.onend = () => {
+            if (isGlobalStopped) return;
+            chunkIdx++;
+            activeLoopTimer = setTimeout(speakNextChunk, 280);
+          };
+          u.onerror = () => {
+            if (isGlobalStopped) return;
+            chunkIdx++;
+            activeLoopTimer = setTimeout(speakNextChunk, 200);
+          };
+
+          window.speechSynthesis.speak(u);
+        }
+        speakNextChunk();
+      }
     }
 
-    // 청크 시각적 하이라이트 UI 함수
     function highlightActiveChunk(cardIdx, chunkIdx) {
       clearChunkHighlight(cardIdx);
       const chunkSpan = document.getElementById(`chunk-${cardIdx}-${chunkIdx}`);
@@ -754,7 +801,7 @@
       }
     }
 
-    // [1,000회 무한 반복 엔진 (청크 분할 연동)]
+    // 1,000회 단일 문장 무한 루프
     function play1000Times(itemIdx) {
       ensureAudioUnlocked();
       stopAllAudio();
@@ -785,11 +832,11 @@
         if (statusEl) statusEl.innerText = `${count} / ${TARGET_REPEAT}`;
         curtainCount.innerText = `${count} / ${TARGET_REPEAT}`;
 
-        // 청크 단위로 쪼개어 읽은 뒤, 0.85초 쉬고 다음 루프로 진입
-        speakSentenceByChunks(item.chunks, itemIdx, () => {
+        speakAdaptive(item, itemIdx, () => {
           if (!isGlobalStopped && count < TARGET_REPEAT) {
-            // 문장 전체 낭독 후 따라 말할 수 있는 0.85초 섀도잉 정적 텀
-            activeLoopTimer = setTimeout(runLoop, 850);
+            // 일반 모드는 0.7초, 청크 모드는 0.85초 정적 섀도잉 간격
+            const pauseGap = (readingMode === 'normal') ? 700 : 850;
+            activeLoopTimer = setTimeout(runLoop, pauseGap);
           }
         });
       }
@@ -823,10 +870,10 @@
         document.getElementById('curtain-text').innerText = fullEn;
         document.getElementById('curtain-count').innerText = `문장 ${idx + 1} / ${list.length}`;
 
-        speakSentenceByChunks(item.chunks, idx, () => {
+        speakAdaptive(item, idx, () => {
           if (!isGlobalStopped) {
             idx++;
-            activeLoopTimer = setTimeout(playNextSentence, 900);
+            activeLoopTimer = setTimeout(playNextSentence, 800);
           }
         });
       }
@@ -879,7 +926,7 @@
         const fullEn = getFullSentence(item);
         const isFav = reviewStore.some(r => getFullSentence(r) === fullEn);
 
-        // 청크별 span 및 ID 부여 (음성 연동 하이라이트용)
+        // 시각적 청크 span (색상 표시는 항상 유지됨)
         const chunksHtml = item.chunks.map((c, cIdx) => {
           return `<span class="chunk chunk-${c.type}" id="chunk-${idx}-${cIdx}">${c.text}</span>`;
         }).join(' ');
@@ -945,7 +992,7 @@
       } else {
         reviewStore.push(target);
       }
-      localStorage.setItem('phrasal_reviews_v4', JSON.stringify(reviewStore));
+      localStorage.setItem('phrasal_reviews_v5', JSON.stringify(reviewStore));
       renderCards();
     }
 
@@ -1002,7 +1049,7 @@
       lastTap = now;
     }
 
-    // 초기 화면 렌더링
+    // 초기 실행
     renderCards();
   </script>
 </body>
