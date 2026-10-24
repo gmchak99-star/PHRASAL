@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실전 구동사 청크 트레이너</title>
+  <title>실전 구동사 트레이너</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -88,12 +88,18 @@
       color: #fff;
     }
 
-    /* 상단 컨트롤 바 */
+    /* [핵심 수정] 스크롤 시 상단에 딱 붙어 떠 있는 고정 컨트롤 바 */
     .global-controls {
-      background: rgba(21, 30, 50, 0.9);
-      border: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #3b82f6;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
       border-radius: 10px;
-      padding: 10px;
+      padding: 10px 8px;
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
@@ -104,9 +110,9 @@
     .ctrl-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .btn-pill {
       background: #1e293b;
-      border: 1px solid #334155;
+      border: 1px solid #475569;
       color: #e2e8f0;
-      padding: 7px 10px;
+      padding: 7px 9px;
       border-radius: 6px;
       font-size: 0.8rem;
       font-weight: 700;
@@ -116,7 +122,7 @@
       background: #0d9488;
       border: 1px solid #14b8a6;
       color: #fff;
-      padding: 7px 11px;
+      padding: 7px 10px;
       border-radius: 6px;
       font-size: 0.8rem;
       font-weight: 800;
@@ -146,7 +152,7 @@
       background: var(--danger);
       color: #fff;
       border: none;
-      padding: 7px 11px;
+      padding: 7px 12px;
       border-radius: 6px;
       font-weight: 800;
       font-size: 0.8rem;
@@ -203,7 +209,7 @@
       line-height: 1.4;
     }
 
-    /* 청크 스타일 (색상은 그대로 유지) */
+    /* 청크 스타일 (색상 항상 유지) */
     .en-box {
       background: #090d16;
       border-radius: 8px;
@@ -236,7 +242,7 @@
     .chunk-obj  { color: var(--c-obj); }
     .chunk-mod  { color: var(--c-mod); }
 
-    /* 동의어/반의어 태그 박스 */
+    /* 동의어/반의어 박스 */
     .meta-box {
       display: flex;
       flex-wrap: wrap;
@@ -336,7 +342,7 @@
 
   <header>
     <h1>🔥 실전 구동사 트레이너</h1>
-    <p class="desc">색상 청크 어순 체화 | 일반·청크 리듬 토글 | 1,000회 무한 루프</p>
+    <p class="desc">색상 청크 어순 체화 | 상단 제어바 스크롤 고정 | 1,000회 무한 루프</p>
   </header>
 
   <!-- Web AudioContext 오디오 언락 & TTS 초기화 모듈 -->
@@ -353,17 +359,16 @@
     <button class="tab-btn" onclick="switchCategory('review')">⭐ 복습함 (<span id="rev-cnt">0</span>)</button>
   </div>
 
-  <!-- 상단 제어 바 -->
+  <!-- [스크롤 고정] 제어 버튼 바 -->
   <div class="global-controls">
     <div class="ctrl-group">
       <button class="btn-pill" id="g-voice" onclick="toggleGlobalVoice()">👨 남성 음성</button>
       <button class="btn-pill" id="g-speed" onclick="toggleGlobalSpeed()">0.85x (기본)</button>
-      <!-- 읽기 모드 토글 버튼 (일반 통문장 / 청크 분할) -->
-      <button class="btn-mode-toggle" id="g-reading-mode" onclick="toggleReadingMode()">🗣️ 낭독: 일반 (자연스럽게)</button>
+      <button class="btn-mode-toggle" id="g-reading-mode" onclick="toggleReadingMode()">🗣️ 낭독: 일반</button>
     </div>
     <div class="ctrl-group">
-      <button class="btn-shuffle" onclick="shuffleCurrentList()">🔀 셔플 (랜덤)</button>
-      <button class="btn-seq" onclick="startSequentialPlay()">🔁 전체 순차</button>
+      <button class="btn-shuffle" onclick="shuffleCurrentList()">🔀 셔플</button>
+      <button class="btn-seq" onclick="startSequentialPlay()">🔁 전체순차</button>
       <button class="btn-emergency-stop" onclick="stopAllAudio()">⏹️ 정지</button>
     </div>
   </div>
@@ -669,10 +674,10 @@
        앱 상태 및 스마트 TTS 낭독 엔진
        ========================================================================== */
     let curCat = 'daily';
-    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v5') || '[]');
+    let reviewStore = JSON.parse(localStorage.getItem('phrasal_reviews_v6') || '[]');
     let currentVoiceGender = 'male';
     let currentRate = 0.85;
-    let readingMode = 'normal'; // 'normal' (일반 자연스러운 리듬) vs 'chunk' (청크 분절)
+    let readingMode = 'normal'; // 'normal' (일반) vs 'chunk' (청크 끊어 읽기)
     let isGlobalStopped = false;
     let activeLoopTimer = null;
     const TARGET_REPEAT = 1000;
@@ -702,26 +707,23 @@
       return item.chunks.map(c => c.text).join(' ');
     }
 
-    // 낭독 모드 토글 함수
     function toggleReadingMode() {
       const btn = document.getElementById('g-reading-mode');
       if (readingMode === 'normal') {
         readingMode = 'chunk';
-        btn.innerText = "✂️ 낭독: 청크 (끊어 읽기)";
+        btn.innerText = "✂️ 낭독: 청크";
         btn.style.background = "#0284c7";
         btn.style.borderColor = "#38bdf8";
       } else {
         readingMode = 'normal';
-        btn.innerText = "🗣️ 낭독: 일반 (자연스럽게)";
+        btn.innerText = "🗣️ 낭독: 일반";
         btn.style.background = "#0d9488";
         btn.style.borderColor = "#14b8a6";
       }
     }
 
-    // [핵심 엔진] 모드에 따라 일반 통문장 또는 청크 분절로 읽어주는 통합 실행 함수
     function speakAdaptive(item, cardIdx, onComplete) {
       if (readingMode === 'normal') {
-        // [일반 모드] 물 흐르듯 통문장으로 자연스럽게 발화
         clearChunkHighlight(cardIdx);
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
@@ -746,7 +748,6 @@
 
         window.speechSynthesis.speak(u);
       } else {
-        // [청크 모드] 청크 사이 0.28초 쉬어가며 분절 발화
         let chunkIdx = 0;
         function speakNextChunk() {
           if (isGlobalStopped) return;
@@ -801,7 +802,6 @@
       }
     }
 
-    // 1,000회 단일 문장 무한 루프
     function play1000Times(itemIdx) {
       ensureAudioUnlocked();
       stopAllAudio();
@@ -834,7 +834,6 @@
 
         speakAdaptive(item, itemIdx, () => {
           if (!isGlobalStopped && count < TARGET_REPEAT) {
-            // 일반 모드는 0.7초, 청크 모드는 0.85초 정적 섀도잉 간격
             const pauseGap = (readingMode === 'normal') ? 700 : 850;
             activeLoopTimer = setTimeout(runLoop, pauseGap);
           }
@@ -844,7 +843,6 @@
       runLoop();
     }
 
-    // 전체 순차 반복 모드
     function startSequentialPlay() {
       ensureAudioUnlocked();
       stopAllAudio();
@@ -881,7 +879,6 @@
       playNextSentence();
     }
 
-    // 긴급 정지
     function stopAllAudio() {
       isGlobalStopped = true;
       clearTimeout(activeLoopTimer);
@@ -891,9 +888,6 @@
       document.querySelectorAll('.chunk').forEach(el => el.classList.remove('active-spoken'));
     }
 
-    /* ==========================================================================
-       렌더링 및 UI 조작
-       ========================================================================== */
     function getCurrentList() {
       return (curCat === 'review') ? reviewStore : phrasalDB[curCat];
     }
@@ -926,7 +920,6 @@
         const fullEn = getFullSentence(item);
         const isFav = reviewStore.some(r => getFullSentence(r) === fullEn);
 
-        // 시각적 청크 span (색상 표시는 항상 유지됨)
         const chunksHtml = item.chunks.map((c, cIdx) => {
           return `<span class="chunk chunk-${c.type}" id="chunk-${idx}-${cIdx}">${c.text}</span>`;
         }).join(' ');
@@ -992,7 +985,7 @@
       } else {
         reviewStore.push(target);
       }
-      localStorage.setItem('phrasal_reviews_v5', JSON.stringify(reviewStore));
+      localStorage.setItem('phrasal_reviews_v6', JSON.stringify(reviewStore));
       renderCards();
     }
 
@@ -1033,7 +1026,6 @@
       }
     }
 
-    /* OLED 절전 암전 커튼 */
     let lastTap = 0;
     function openOledCurtain() {
       document.getElementById('dark-curtain').style.display = 'flex';
@@ -1049,7 +1041,6 @@
       lastTap = now;
     }
 
-    // 초기 실행
     renderCards();
   </script>
 </body>
